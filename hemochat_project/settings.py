@@ -32,7 +32,7 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # deploy
-DEBUG = False
+DEBUG = True
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',')
 CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'django.contrib.sites',
     'users',
     'health_records',
+    'chat_services',
     'social_django',
 
     # allauth
