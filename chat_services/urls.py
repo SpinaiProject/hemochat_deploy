@@ -6,4 +6,7 @@ urlpatterns = [
     path('create_thread/', create_thread, name='create_thread'),
     path('create_message/', create_message, name='create_message'),
     # path('create_run/', create_run, name='create_run'),
+    path('chatrooms/<uuid:pk>/', chatroom_detail_view, name='chatroom_detail_view'),
+    path('create_chatroom/', create_chatroom, name='create_chatroom'),
+    path('create_stream/<uuid:chatroom_id>/', create_stream, name='create_stream'),
 ]
