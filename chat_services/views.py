@@ -178,3 +178,51 @@ def chatroom_detail_view(request, pk):
         return JsonResponse({'error': 'ChatRoom not found'}, status=404)
 
 
+def save_chat_history(chatroom_id, user_question, complete_answer):
+    try:
+        chatroom = ChatRoom.objects.get(id=chatroom_id)
+        current_history = json.loads(chatroom.chat_history) if chatroom.chat_history else []
+        new_qa_pair = [{"role": 'user', "content": user_question}, {"role": 'assistant', "content": complete_answer}]
+        current_history.extend(new_qa_pair)
+        chatroom.chat_history = json.dumps(current_history, cls=DjangoJSONEncoder, ensure_ascii=False)
+        chatroom.save()
+    except ChatRoom.DoesNotExist:
+        pass
+
+
+@require_http_methods(["POST"])
+@permission_classes([IsAuthenticated])
+def create_stream(request, chatroom_id):
+    try:
+        data = json.loads(request.body)
+        user_question = data.get('question', '')
+        previous_chats = data.get('previous_chats', '')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    api_key = os.environ.get('OPEN_AI_API_KEY')
+    client = OpenAI(api_key=api_key)
+    complete_answer = ""
+
+    def event_stream():
+        nonlocal complete_answer
+        for chunk in client.chat.completions.create(
+                model="gpt-3.5-turbo-0613",
+                messages=[previous_chats, {"role": "user", "content": user_question}],
+                stream=True,
+        ):
+            chunk_message = chunk.choices[0].delta.content
+            state = chunk.choices[0].finish_reason
+            if state == 'stop':
+                save_chat_history(chatroom_id, user_question, complete_answer)
+                print(chatroom_id, user_question, complete_answer, "finished!")
+                break
+
+            else:
+                complete_answer += chunk_message
+            yield f"data: {chunk_message}\n\n"
+
+    response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
+    response['X-Accel-Buffering'] = 'no'
+    response['Cache-Control'] = 'no-cache'
+    return response
