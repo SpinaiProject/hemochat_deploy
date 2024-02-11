@@ -2,15 +2,17 @@ import json
 import os
 import time
 
-from django.http import JsonResponse
+from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.http import require_http_methods
+from rest_framework import status
 from rest_framework.decorators import permission_classes, api_view
 from rest_framework.permissions import IsAuthenticated
 
-from .models import AssistantConfig, ChatThread
+from .models import *
+from .serializers import ChatRoomSerializer
+
 from openai import OpenAI
 import openai
-from django.contrib.auth.models import User
 
 
 @api_view(['POST'])
@@ -124,5 +126,55 @@ def create_message(request):
             return JsonResponse({"error": str(e)}, status=500)
     else:
         return JsonResponse({"error": "Invalid request method."}, status=400)
+
+
+# @require_http_methods(["POST"])
+# def create_run(request):
+#     api_key = os.environ.get('OPEN_AI_API_KEY')
+#     client = OpenAI(api_key=api_key)
+#     thread_id = request.POST.get("thread_id")
+#     assistant_id = request.POST.get("assistant_id")
+#
+#     if not thread_id or not assistant_id:
+#         return JsonResponse({"error": "Missing thread_id or assistant_id"}, status=400)
+#
+#     try:
+#         run = client.beta.threads.runs.create(
+#             thread_id=thread_id,
+#             assistant_id=assistant_id
+#         )
+#
+#         return JsonResponse({
+#             "status": "success",
+#             "data": run
+#         })
+#     except Exception as e:
+#         return JsonResponse({
+#             "status": "error",
+#             "message": str(e)
+#         }, status=500)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated]) # 어느 검사지에 대해 채팅할 것인지에 대한 정보 추가 필요
+def create_chatroom(request):
+    user = request.user
+    chatroom = ChatRoom.objects.create(user=user)
+
+    return JsonResponse({
+        'message': 'ChatRoom created successfully.',
+        'chatroom_id': str(chatroom.id)
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def chatroom_detail_view(request, pk):
+    try:
+        chatroom = ChatRoom.objects.get(pk=pk)
+        serializer = ChatRoomSerializer(chatroom)
+        return JsonResponse(serializer.data, safe=False)
+    except ChatRoom.DoesNotExist:
+        return JsonResponse({'error': 'ChatRoom not found'}, status=404)
 
 
