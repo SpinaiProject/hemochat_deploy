@@ -72,6 +72,10 @@ INSTALLED_APPS = [
     # aws
     'storages',
 
+    # celery,redis
+    "django_celery_beat",
+    "django_celery_results",
+
     'corsheaders',
 ]
 
@@ -113,16 +117,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "hemochat_project.wsgi.application"
 
-# Database
-# https://docs.djangoproject.com/en/5.0/ref/settings/#databases
-
-# DATABASES = {
-#     "default": {
-#         "ENGINE": "django.db.backends.sqlite3",
-#         "NAME": BASE_DIR / "db.sqlite3",
-#     }
-# }
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
@@ -136,6 +130,11 @@ DATABASES = {
         },
     }
 }
+
+CELERY_ALWAYS_EAGER = True
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL')
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND')
+CELERY_TIMEZONE = 'Asia/Seoul'
 
 AUTH_USER_MODEL = 'users.User'
 # Password validation
@@ -262,3 +261,29 @@ else:  # 로컬 개발 환경 설정
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'logs/app.log',
+            'formatter': 'detailed',
+        },
+    },
+    'formatters': {
+        'detailed': {
+            'format': '%(asctime)s %(levelname)s %(module)s %(message)s',
+        },
+    },
+    'loggers': {
+        '': {  # 이것은 루트 로거를 의미합니다.
+            'handlers': ['file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    },
+}
+
