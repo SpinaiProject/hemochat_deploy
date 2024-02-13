@@ -262,28 +262,28 @@ else:  # 로컬 개발 환경 설정
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'handlers': {
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': 'logs/app.log',
-            'formatter': 'detailed',
-        },
-    },
-    'formatters': {
-        'detailed': {
-            'format': '%(asctime)s %(levelname)s %(module)s %(message)s',
-        },
-    },
-    'loggers': {
-        '': {  # 이것은 루트 로거를 의미합니다.
-            'handlers': ['file'],
-            'level': 'INFO',
-            'propagate': True,
-        },
-    },
-}
-
+# LOGGING = {
+#     'version': 1,
+#     'disable_existing_loggers': False,
+#     'handlers': {
+#         'file': {
+#             'level': 'INFO',
+#             'class': 'logging.FileHandler',
+#             'filename': 'logs/app.log',
+#             'formatter': 'detailed',
+#         },
+#     },
+#     'formatters': {
+#         'detailed': {
+#             'format': '%(asctime)s %(levelname)s %(module)s %(message)s',
+#         },
+#     },
+#     'loggers': {
+#         '': {
+#             'handlers': ['file'],
+#             'level': 'INFO',
+#             'propagate': True,
+#         },
+#     },
+# }
+#
