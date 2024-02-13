@@ -236,3 +236,4 @@ def create_stream(request, chatroom_id):
     response['X-Accel-Buffering'] = 'no'
     response['Cache-Control'] = 'no-cache'
     return response
+    #test
