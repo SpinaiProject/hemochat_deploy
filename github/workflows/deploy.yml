@@ -1,0 +1,87 @@
+name: Deploy to cloudtype
+on:
+  push:
+    branches:
+      - main
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Connect deploy key
+        uses: cloudtype-github-actions/connect@v1
+        with:
+          token: ${{ secrets.CLOUDTYPE_TOKEN }}
+          ghtoken: ${{ secrets.GHP_TOKEN }}
+      - name: Deploy
+        uses: cloudtype-github-actions/deploy@v1
+        with:
+          token: ${{ secrets.CLOUDTYPE_TOKEN }}
+          project: spinaiceo/hemochat-deploy
+          stage: main
+          yaml: >
+            name: hemochat-deploy
+
+            app: python@3.11
+
+            options:
+              env:
+                - name: DJANGO_SECRET_KEY
+                  value: 5xeuu%71e@wu=#f@^xs6fp0d$adc@c7dvk@8-gfb%0r@ynpe*-
+                - name: DJANGO_SUPERUSER_USERNAME
+                  value: super5
+                - name: DJANGO_SUPERUSER_PASSWORD
+                  value: "1234"
+                - name: DJANGO_SUPERUSER_EMAIL
+                  value: test@naver.com
+                - name: TEMPLATE_OCR_API_URL
+                  value: https://w9n1fu5j89.apigw.ntruss.com/custom/v1/27481/03c4dda4cec9eacb83f1261b891e0ce72a079d9c757e9bf1eea8996f0518cde0/infer
+                - name: TEMPLATE_OCR_SECRET_KEY
+                  value: eEhvT3VaYWNRS3NNZnppalpNT0d6VHRIV3JGV1dtSmk=
+                - name: GENERAL_OCR_API_URL
+                  value: https://w9n1fu5j89.apigw.ntruss.com/custom/v1/27480/4a0071dababd5ad0d165dcd30a4ad918f994704528736195f0e09477b00b7f46/general
+                - name: GENERAL_OCR_SECRET_KEY
+                  value: Tk5CZGhua0ZYU29mcm5wWWtUS0hpcFhvaEZzUGJIZlE=
+                - name: DJANGO_ALLOWED_HOSTS
+                  value: "*"
+                - name: BASE_URL
+                  value: https://port-0-hemochat-deploy-ghdys32bls1g00sw.sel5.cloudtype.app/
+                - name: KAKAO_REST_API_KEY
+                  value: 823da08ec82fe151a5b36f671fe05845
+                - name: SOCIAL_AUTH_KAKAO_CLIENT_ID
+                  value: "1017441"
+                - name: DB_NAME
+                  value: database_1
+                - name: DB_USER
+                  value: admin
+                - name: DB_PASSWORD
+                  value: g00dman98!
+                - name: DB_HOST
+                  value: database-1.chuwa48k2y51.ap-northeast-2.rds.amazonaws.com
+                - name: AWS_REGION
+                  value: ap-northeast-2
+                - name: AWS_STORAGE_BUCKET_NAME
+                  value: hemochat
+                - name: AWS_ACCESS_KEY_ID
+                  value: AKIA3RQXKUMFINPBCP5E
+                - name: AWS_SECRET_ACCESS_KEY
+                  value: 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
+                - name: IMAGE_CUSTOM_DOMAIN
+                  value: https://d1cdpifac4y4xp.cloudfront.net/
+                - name: DEFAULT_FILE_STORAGE
+                  value: storages.backends.s3boto3.S3Boto3Storage
+                - name: OPEN_AI_API_KEY
+                  value: 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
+                - name: CELERY_BROKER_URL
+                  value: redis://svc.sel5.cloudtype.app:31387
+                - name: CELERY_RESULT_BACKEND
+                  value: redis://svc.sel5.cloudtype.app:31387
+              ports: 8000
+              start: python3 manage.py runserver 0:8000
+              prestart: python3 manage.py makemigrations && python3 manage.py migrate &&
+                python3 manage.py createsuperuser --noinpu
+            context:
+              git:
+                url: git@github.com:${{ github.repository }}.git
+                ref: ${{ github.ref }}
