@@ -7,6 +7,7 @@ from django.views.static import serve
 urlpatterns = [
     path("admin/", admin.site.urls),
     path('api/users/', include("users.urls")),
+    path('api/chat_services/', include("chat_services.urls")),
     path('api/health_records/', include("health_records.urls")),
     path('dj-rest-auth/', include('dj_rest_auth.urls')),
     path('dj-rest-auth/registration/', include('dj_rest_auth.registration.urls')),
