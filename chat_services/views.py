@@ -2,10 +2,12 @@ import json
 import os
 import time
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.http import require_http_methods
 from rest_framework import status
 from rest_framework.decorators import permission_classes, api_view
+from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 
 from .models import *
@@ -13,6 +15,8 @@ from .serializers import ChatRoomSerializer
 
 from openai import OpenAI
 import openai
+
+from ..health_records.models import HealthRecord
 
 
 @api_view(['POST'])
@@ -156,14 +160,41 @@ def create_message(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])  # 어느 검사지에 대해 채팅할 것인지에 대한 정보 추가 필요
+@permission_classes([IsAuthenticated])
 def create_chatroom(request):
     user = request.user
     chatroom = ChatRoom.objects.create(user=user)
 
+    try:
+        data = json.loads(request.body)
+        health_record_ids = data.get('health_record_ids', [])
+        health_records = HealthRecord.objects.filter(id__in=health_record_ids)
+        chatroom.health_records.set(health_records)
+    except (ValueError, ObjectDoesNotExist) as e:
+        return JsonResponse({
+            'message': 'Error processing your request. Please check the provided health record IDs.',
+            'error': str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
+
     return JsonResponse({
-        'message': 'ChatRoom created successfully.',
+        'message': 'ChatRoom created successfully with health records.',
         'chatroom_id': str(chatroom.id)
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_chatroom(request, chatroom_id):
+    chatroom = get_object_or_404(ChatRoom, id=chatroom_id)
+
+    if chatroom.user != request.user:
+        return JsonResponse({
+            'message': 'You do not have permission to delete this chatroom.'
+        }, status=status.HTTP_403_FORBIDDEN)
+
+    chatroom.delete()
+    return JsonResponse({
+        'message': 'ChatRoom deleted successfully.'
     }, status=status.HTTP_200_OK)
 
 
@@ -236,4 +267,4 @@ def create_stream(request, chatroom_id):
     response['X-Accel-Buffering'] = 'no'
     response['Cache-Control'] = 'no-cache'
     return response
-    #test
+    # test

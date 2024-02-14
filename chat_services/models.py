@@ -34,6 +34,7 @@ class ChatThread(models.Model):
 class ChatRoom(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    health_records = models.ManyToManyField('health_records.HealthRecord', related_name='chatrooms', blank=True)
     chat_history = models.TextField(blank=True, default=json.dumps([], cls=DjangoJSONEncoder))
     summarized_chat_history = models.TextField(blank=True, default=json.dumps([], cls=DjangoJSONEncoder))
 
