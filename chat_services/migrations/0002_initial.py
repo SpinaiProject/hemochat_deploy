@@ -9,20 +9,39 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
+        ("chat_services", "0001_initial"),
         ("health_records", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddField(
-            model_name="healthrecordimage",
+            model_name="chatthread",
+            name="user",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="assistant_sessions",
+                to=settings.AUTH_USER_MODEL,
+            ),
+        ),
+        migrations.AddField(
+            model_name="chatroom",
+            name="health_records",
+            field=models.ManyToManyField(
+                blank=True,
+                related_name="chatrooms",
+                to="health_records.healthrecordimage",
+            ),
+        ),
+        migrations.AddField(
+            model_name="chatroom",
             name="user",
             field=models.ForeignKey(
                 on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL
             ),
         ),
         migrations.AddField(
-            model_name="healthrecordfolder",
+            model_name="assistantconfig",
             name="user",
             field=models.ForeignKey(
                 on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL
