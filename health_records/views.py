@@ -8,57 +8,54 @@ from urllib.parse import urlparse, unquote
 
 import requests
 from django.http import JsonResponse
-import boto3
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from .models import *
 from .serializers import *
-from .forms import *
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])  # 헤더에 Authorization': Bearer userToken 형태로 jwt토큰 담아서 요청해야 함
-def upload_image(request):
-    if 'image' not in request.FILES:
-        return Response({'error': 'No image file provided'}, status=400)
+def upload_images(request):
+    user = request.user
+    if not user.is_authenticated:
+        return JsonResponse({"error": "User is not authenticated."}, status=401)
+    if 'images' not in request.FILES:
+        return Response({'error': 'No image files provided'}, status=400)
 
-    image_file = request.FILES['image']
+    images_files = request.FILES.getlist('images')
+    valid_extensions = ['.png', '.jpg', '.jpeg']
+    folder = HealthRecordFolder(user=request.user)
+    folder.save()
 
-    if not image_file.name.endswith(('.png', '.jpg', '.jpeg')):
-        return Response({'error': "Only .png, .jpg and .jpeg formats are supported."}, status=400)
-    if image_file.size > 10 * 1024 * 1024:
-        return Response({'error': "The image size cannot exceed 10MB."}, status=400)
+    urls = []
 
-    try:
-        health_record = HealthRecord(user=request.user, image=image_file)
-        health_record.save()
+    for image_file in images_files:
+        if not any(image_file.name.endswith(ext) for ext in valid_extensions):
+            return Response({'error': "Only .png, .jpg and .jpeg formats are supported."}, status=400)
+        if image_file.size > 10 * 1024 * 1024:
+            return Response({'error': "Each image size cannot exceed 10MB."}, status=400)
 
-        # s3_object_key = health_record.image.name
-        # s3_client = boto3.client('s3',
-        #                          aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-        #                          aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-        #                          region_name=os.environ.get('AWS_REGION'))
-        # presigned_url = s3_client.generate_presigned_url('get_object',
-        #                                                  Params={'Bucket': os.environ.get('AWS_STORAGE_BUCKET_NAME'),
-        #                                                          'Key': s3_object_key},
-        #                                                  ExpiresIn=3600)
-        #
-        # return Response({'message': 'Image uploaded successfully!', 'url': presigned_url})
-        cloudfront_domain_name = 'd1cdpifac4y4xp.cloudfront.net'
-        s3_object_key = health_record.image.name
-        cloudfront_url = f'https://{cloudfront_domain_name}/{s3_object_key}'
+        try:
+            health_record_image = HealthRecordImage(folder=folder, image=image_file, user=user)
+            health_record_image.save()
+            cloudfront_domain_name = os.environ.get('IMAGE_CUSTOM_DOMAIN')
+            s3_object_key = health_record_image.image.name
+            cloudfront_url = f'https://{cloudfront_domain_name}/{s3_object_key}'
+            urls.append(cloudfront_url)
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
 
-        return Response({'message': 'Image uploaded successfully!', 'url': cloudfront_url})
-    except Exception as e:
-        return Response({'error': str(e)}, status=500)
+    return Response({'message': 'Images uploaded successfully!', 'urls': urls})
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])  # 헤더에 Authorization': Bearer userToken 형태로 jwt토큰 담아서 요청해야 함
 def user_health_records(request):
-    records = HealthRecord.objects.filter(user=request.user)
-    serializer = HealthRecordSerializer(records, many=True)
+    records = HealthRecordImage.objects.filter(user=request.user)
+    serializer = HealthRecordImageSerializer(records, many=True)
     return Response(serializer.data)
 
 
@@ -69,26 +66,26 @@ def date_filtered_user_health_records(request):
     start_date = query_params.get('start_date', None)
     end_date = query_params.get('end_date', None)
 
-    records = HealthRecord.objects.filter(user=request.user)
+    records = HealthRecordImage.objects.filter(user=request.user)
     if start_date and end_date:
         # ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD 형태로 쿼리파라미터를 담아 요청해야 함
         start = datetime.datetime.strptime(start_date, '%Y-%m-%d')
         end = datetime.datetime.strptime(end_date, '%Y-%m-%d')
         records = records.filter(created_at__range=(start, end))
 
-    serializer = HealthRecordSerializer(records, many=True)
+    serializer = HealthRecordImageSerializer(records, many=True)
     return Response(serializer.data)
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])  # 헤더에 Authorization': Bearer userToken 형태로 jwt토큰 담아서 요청해야 함
 def delete_health_records(request):
-    record_ids = request.data.get('record_ids', None)  # request 바디에 삭제할 검사지 ID를 리스트로 담아서 넘겨줘야 함
+    record_ids = request.data.get('record_ids', None)  # request 바디에 삭제할 검사지 ID를 리스트로(raw json) 담아서 넘겨줘야 함
 
     if not record_ids:
         return Response({'error': 'No record IDs provided'}, status=400)
 
-    records_to_delete = HealthRecord.objects.filter(user=request.user, id__in=record_ids)
+    records_to_delete = HealthRecordImage.objects.filter(user=request.user, id__in=record_ids)
     existing_ids = records_to_delete.values_list('id', flat=True)
     non_existing_ids = set(record_ids) - set(existing_ids)
 
@@ -103,12 +100,13 @@ def delete_health_records(request):
 @permission_classes([IsAuthenticated])  # 헤더에 Authorization': Bearer userToken 형태로 jwt토큰 담아서 요청해야 함
 def user_health_records_count(request):
     user = request.user
-    total_records_count = user.healthrecord_set.count()
-    analyzed_records_count = user.healthrecord_set.exclude(ocr_text='').count()
+    total_records_count = user.healthrecordimage_set.count()
+    analyzed_records_count = user.healthrecordimage_set.exclude(ocr_text='').count()
 
     return Response({
         'total_records_count': total_records_count,
-        'analyzed_records_count': analyzed_records_count
+        'analyzed': analyzed_records_count,
+        'unanalyzed': total_records_count - analyzed_records_count,
     })
 
 
@@ -119,7 +117,9 @@ def general_ocr_analysis(request):
     if not record_ids:
         return Response({'error': 'No record IDs provided'}, status=400)
 
-    records_to_analyze = HealthRecord.objects.filter(user=request.user, id__in=record_ids)
+    records_to_analyze = HealthRecordImage.objects.filter(user=request.user, id__in=record_ids)
+    if not records_to_analyze:
+        return Response({'error': 'provided record IDs do not exists'}, status=400)
 
     api_url = os.environ.get('GENERAL_OCR_API_URL')
     secret_key = os.environ.get('GENERAL_OCR_SECRET_KEY')
@@ -177,7 +177,10 @@ def template_ocr_analysis(request):
     if not record_ids:
         return Response({'error': 'No record IDs provided'}, status=400)
 
-    records_to_analyze = HealthRecord.objects.filter(user=request.user, id__in=record_ids)
+    records_to_analyze = HealthRecordImage.objects.filter(user=request.user, id__in=record_ids)
+    if not records_to_analyze:
+        return Response({'error': 'provided record IDs do not exists'}, status=400)
+
     for record in records_to_analyze:
         image_name = record.image.name
         file_extension = os.path.splitext(image_name)[1][1:]

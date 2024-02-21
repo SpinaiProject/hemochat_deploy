@@ -130,6 +130,15 @@ DATABASES = {
         },
     }
 }
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': os.environ.get('REDIS_CACHE'),
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        }
+    }
+}
 
 CELERY_ALWAYS_EAGER = True
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL')

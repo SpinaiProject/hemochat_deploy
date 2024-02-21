@@ -2,6 +2,8 @@ import json
 import os
 import time
 
+
+from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.http import require_http_methods
@@ -11,12 +13,12 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 
 from .models import *
+from health_records.models import *
 from .serializers import ChatRoomSerializer
 
 from openai import OpenAI
 import openai
 
-from ..health_records.models import HealthRecord
 
 
 @api_view(['POST'])
@@ -167,8 +169,17 @@ def create_chatroom(request):
 
     try:
         data = json.loads(request.body)
-        health_record_ids = data.get('health_record_ids', [])
-        health_records = HealthRecord.objects.filter(id__in=health_record_ids)
+        health_record_ids = data.get('record_ids', [])
+        if not health_record_ids:
+            raise ValueError("No health record IDs provided.")
+
+        health_records = HealthRecordImage.objects.filter(id__in=health_record_ids)
+        found_ids = health_records.values_list('id', flat=True)
+        not_found_ids = set(health_record_ids) - set(found_ids)
+
+        if not_found_ids:
+            raise ObjectDoesNotExist(f"HealthRecordImage not found for IDs: {not_found_ids}")
+
         chatroom.health_records.set(health_records)
     except (ValueError, ObjectDoesNotExist) as e:
         return JsonResponse({
@@ -209,16 +220,31 @@ def chatroom_detail_view(request, pk):
         return JsonResponse({'error': 'ChatRoom not found'}, status=404)
 
 
+def add_to_cache(chatroom_id, new_qa_pair):
+    cache_key = f"chatroom_{chatroom_id}_chat_history"
+    current_history_json = cache.get(cache_key, '[]')
+    if isinstance(current_history_json, str):
+        current_history = json.loads(current_history_json)
+    else:
+        current_history = current_history_json
+
+    current_history.extend(new_qa_pair)
+    cache.set(cache_key, json.dumps(current_history), timeout=3600 * 8)
+
+
 def save_chat_history(chatroom_id, user_question, complete_answer):
     try:
         chatroom = ChatRoom.objects.get(id=chatroom_id)
-        current_history = json.loads(chatroom.chat_history) if chatroom.chat_history else []
+        current_history = chatroom.chat_history if chatroom.chat_history else []
         new_qa_pair = [{"role": 'user', "content": user_question}, {"role": 'assistant', "content": complete_answer}]
+
         current_history.extend(new_qa_pair)
-        chatroom.chat_history = json.dumps(current_history, cls=DjangoJSONEncoder, ensure_ascii=False)
+        chatroom.chat_history = current_history
         chatroom.save()
+
+        add_to_cache(chatroom_id, new_qa_pair)
     except ChatRoom.DoesNotExist:
-        pass
+        return JsonResponse({'error': 'ChatRoom not found'}, status=404)
 
 
 @require_http_methods(["POST"])
@@ -228,7 +254,27 @@ def create_stream(request, chatroom_id):
         decoded_body = request.body.decode('utf-8')
         data = json.loads(decoded_body)
         user_question = data.get('user_question', '')
-        chat_history = data.get('chat_history', [])
+        ocr_cache_key, chat_history_cache_key = f"chatroom_{chatroom_id}_ocr_texts", f"chatroom_{chatroom_id}_chat_history"
+        ocr_texts = cache.get(ocr_cache_key)
+        chat_history_json = cache.get(chat_history_cache_key, '[]')  # 캐시에서 chat_history 데이터 가져오기
+
+        if isinstance(chat_history_json, str):
+            chat_history = json.loads(chat_history_json)
+        else:
+            chat_history = chat_history_json
+        if ocr_texts is None or chat_history is None:
+            chatroom = ChatRoom.objects.get(id=chatroom_id)
+            if not ocr_texts:
+                print("ocr cache fail")
+                ocr_texts = chatroom.health_records.all().values_list('ocr_text', flat=True)
+                cache.set(ocr_cache_key, ocr_texts, timeout=3600 * 8)
+            if not chat_history:
+                print("chat history cache fail")
+                chat_history = chatroom.chat_history
+                cache.set(chat_history_cache_key, json.dumps(chat_history), timeout=3600 * 8)
+        else:
+            print("cache hit success:", ocr_texts)
+            print("cache hit success:", chat_history, type(chat_history))
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
@@ -236,14 +282,17 @@ def create_stream(request, chatroom_id):
     client = OpenAI(api_key=api_key)
     system_feature = {
         "role": "system",
-        "content": "의료 검사지에 대한 상담을 진행한다. 대화 기록을 토대로 \
-         이미 대화한 적 있는 내용에 대해서는 간단히 말해라. 반드시 한국말로 답변해라. 의료 상담과 무관한 분야에 대한 질문은 반드시 거절해라."
+        "content": f"의료 검사지에 대한 상담을 진행한다. 대화 기록을 토대로 이미 대화한 적 있는 내용에 대해서는 간단히 말해라.\
+        반드시 한국말로 답변해라. \
+        또한 아래는 유저가 질의하고싶은 건강검사지의 검사내역이다 {ocr_texts}\
+        관련질문에 대해 검사내역과 대화 맥락에 기반해 성실히 답변해라"
     }
-
+    # 의료 상담과 무관한 분야에 대한 질문은 반드시 거절해라.
     query = [system_feature]
-    query.extend(chat_history)
+    if chat_history:
+        query.extend(chat_history)
     query.append({"role": "user", "content": user_question})
-    print(query)
+    print("final query:", query)
     complete_answer = ""
 
     def event_stream():
@@ -257,7 +306,7 @@ def create_stream(request, chatroom_id):
             state = chunk.choices[0].finish_reason
             if state == 'stop':
                 save_chat_history(chatroom_id, user_question, complete_answer)
-                print(chatroom_id, user_question, complete_answer, "finished!")
+                print("user_question:", user_question, "\ncomplete_answer", complete_answer)
                 break
             else:
                 complete_answer += chunk_message
@@ -267,4 +316,3 @@ def create_stream(request, chatroom_id):
     response['X-Accel-Buffering'] = 'no'
     response['Cache-Control'] = 'no-cache'
     return response
-    # test
