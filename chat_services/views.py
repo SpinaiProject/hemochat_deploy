@@ -168,8 +168,17 @@ def create_chatroom(request):
 
     try:
         data = json.loads(request.body)
-        health_record_ids = data.get('health_record_ids', [])
-        health_records = HealthRecord.objects.filter(id__in=health_record_ids)
+        health_record_ids = data.get('record_ids', [])
+        if not health_record_ids:
+            raise ValueError("No health record IDs provided.")
+
+        health_records = HealthRecordImage.objects.filter(id__in=health_record_ids)
+        found_ids = health_records.values_list('id', flat=True)
+        not_found_ids = set(health_record_ids) - set(found_ids)
+
+        if not_found_ids:
+            raise ObjectDoesNotExist(f"HealthRecordImage not found for IDs: {not_found_ids}")
+
         chatroom.health_records.set(health_records)
     except (ValueError, ObjectDoesNotExist) as e:
         return JsonResponse({
