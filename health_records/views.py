@@ -8,7 +8,6 @@ from urllib.parse import urlparse, unquote
 
 import requests
 from django.http import JsonResponse
-import boto3
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -55,8 +54,8 @@ def upload_images(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])  # 헤더에 Authorization': Bearer userToken 형태로 jwt토큰 담아서 요청해야 함
 def user_health_records(request):
-    records = HealthRecord.objects.filter(user=request.user)
-    serializer = HealthRecordSerializer(records, many=True)
+    records = HealthRecordImage.objects.filter(user=request.user)
+    serializer = HealthRecordImageSerializer(records, many=True)
     return Response(serializer.data)
 
 
@@ -67,26 +66,26 @@ def date_filtered_user_health_records(request):
     start_date = query_params.get('start_date', None)
     end_date = query_params.get('end_date', None)
 
-    records = HealthRecord.objects.filter(user=request.user)
+    records = HealthRecordImage.objects.filter(user=request.user)
     if start_date and end_date:
         # ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD 형태로 쿼리파라미터를 담아 요청해야 함
         start = datetime.datetime.strptime(start_date, '%Y-%m-%d')
         end = datetime.datetime.strptime(end_date, '%Y-%m-%d')
         records = records.filter(created_at__range=(start, end))
 
-    serializer = HealthRecordSerializer(records, many=True)
+    serializer = HealthRecordImageSerializer(records, many=True)
     return Response(serializer.data)
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])  # 헤더에 Authorization': Bearer userToken 형태로 jwt토큰 담아서 요청해야 함
 def delete_health_records(request):
-    record_ids = request.data.get('record_ids', None)  # request 바디에 삭제할 검사지 ID를 리스트로 담아서 넘겨줘야 함
+    record_ids = request.data.get('record_ids', None)  # request 바디에 삭제할 검사지 ID를 리스트로(raw json) 담아서 넘겨줘야 함
 
     if not record_ids:
         return Response({'error': 'No record IDs provided'}, status=400)
 
-    records_to_delete = HealthRecord.objects.filter(user=request.user, id__in=record_ids)
+    records_to_delete = HealthRecordImage.objects.filter(user=request.user, id__in=record_ids)
     existing_ids = records_to_delete.values_list('id', flat=True)
     non_existing_ids = set(record_ids) - set(existing_ids)
 
@@ -101,12 +100,13 @@ def delete_health_records(request):
 @permission_classes([IsAuthenticated])  # 헤더에 Authorization': Bearer userToken 형태로 jwt토큰 담아서 요청해야 함
 def user_health_records_count(request):
     user = request.user
-    total_records_count = user.healthrecord_set.count()
-    analyzed_records_count = user.healthrecord_set.exclude(ocr_text='').count()
+    total_records_count = user.healthrecordimage_set.count()
+    analyzed_records_count = user.healthrecordimage_set.exclude(ocr_text='').count()
 
     return Response({
         'total_records_count': total_records_count,
-        'analyzed_records_count': analyzed_records_count
+        'analyzed': analyzed_records_count,
+        'unanalyzed': total_records_count - analyzed_records_count,
     })
 
 
@@ -117,7 +117,9 @@ def general_ocr_analysis(request):
     if not record_ids:
         return Response({'error': 'No record IDs provided'}, status=400)
 
-    records_to_analyze = HealthRecord.objects.filter(user=request.user, id__in=record_ids)
+    records_to_analyze = HealthRecordImage.objects.filter(user=request.user, id__in=record_ids)
+    if not records_to_analyze:
+        return Response({'error': 'provided record IDs do not exists'}, status=400)
 
     api_url = os.environ.get('GENERAL_OCR_API_URL')
     secret_key = os.environ.get('GENERAL_OCR_SECRET_KEY')
@@ -175,7 +177,10 @@ def template_ocr_analysis(request):
     if not record_ids:
         return Response({'error': 'No record IDs provided'}, status=400)
 
-    records_to_analyze = HealthRecord.objects.filter(user=request.user, id__in=record_ids)
+    records_to_analyze = HealthRecordImage.objects.filter(user=request.user, id__in=record_ids)
+    if not records_to_analyze:
+        return Response({'error': 'provided record IDs do not exists'}, status=400)
+
     for record in records_to_analyze:
         image_name = record.image.name
         file_extension = os.path.splitext(image_name)[1][1:]
