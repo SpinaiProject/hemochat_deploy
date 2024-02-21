@@ -2,6 +2,7 @@ import json
 import os
 import time
 
+
 from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import JsonResponse, StreamingHttpResponse
@@ -12,12 +13,12 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 
 from .models import *
+from health_records.models import *
 from .serializers import ChatRoomSerializer
 
 from openai import OpenAI
 import openai
 
-from health_records.models import *
 
 
 @api_view(['POST'])
