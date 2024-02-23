@@ -209,6 +209,54 @@ def delete_chatroom(request, chatroom_id):
     }, status=status.HTTP_200_OK)
 
 
+def cache_chatroom_data(chatroom_id, new_qa_pair=None):
+    ocr_cache_key = f"chatroom_{chatroom_id}_ocr_texts"
+    chat_history_cache_key = f"chatroom_{chatroom_id}_chat_history"
+
+    ocr_texts = cache.get(ocr_cache_key)
+    chat_history_json = cache.get(chat_history_cache_key)
+
+    try:
+        chatroom = ChatRoom.objects.get(id=chatroom_id)
+
+        if not ocr_texts:
+            ocr_texts = list(chatroom.health_records.all().values_list('ocr_text', flat=True))
+            cache.set(ocr_cache_key, ocr_texts, timeout=600)
+
+        if chat_history_json is None:
+            chat_history = chatroom.chat_history if chatroom.chat_history else []
+            print("read from db or new: ", chat_history, type(chat_history))
+            print("dumped and cached: ", json.dumps(chat_history, ensure_ascii=False),
+                  type(json.dumps(chat_history, ensure_ascii=False)))
+            cache.set(chat_history_cache_key, json.dumps(chat_history, ensure_ascii=False), timeout=600)
+        else:
+            print("before loading: ", chat_history_json, type(chat_history_json))
+            chat_history = json.loads(chat_history_json)
+            print("loaded to python dictionary list: ", chat_history, type(chat_history))
+
+    except ObjectDoesNotExist:
+        return None, None
+
+    if new_qa_pair:
+        print("before extend: ", chat_history, type(chat_history))
+        chat_history.extend(new_qa_pair)
+        print("new_qa_pair: ", new_qa_pair, type(new_qa_pair))
+        print("appended new chat: ", chat_history, type(chat_history))
+        print("dumped and cached: ", json.dumps(chat_history, ensure_ascii=False),
+              type(json.dumps(chat_history, ensure_ascii=False)))
+        cache.set(chat_history_cache_key, json.dumps(chat_history, ensure_ascii=False), timeout=600)
+
+    return ocr_texts, chat_history
+
+
+class CustomJsonResponse(JsonResponse):
+    def __init__(self, data, encoder=json.JSONEncoder, safe=True, json_dumps_params=None, **kwargs):
+        if json_dumps_params is None:
+            json_dumps_params = {}
+        json_dumps_params["ensure_ascii"] = False
+        super().__init__(data, encoder=encoder, safe=safe, json_dumps_params=json_dumps_params, **kwargs)
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def enter_chatroom(request, chatroom_id):
@@ -230,29 +278,10 @@ def enter_chatroom(request, chatroom_id):
         return JsonResponse({'error': 'ChatRoom not found'}, status=404)
 
 
-def add_to_cache(chatroom_id, new_qa_pair):
-    cache_key = f"chatroom_{chatroom_id}_chat_history"
-    current_history_json = cache.get(cache_key, '[]')
-    if isinstance(current_history_json, str):
-        current_history = json.loads(current_history_json)
-    else:
-        current_history = current_history_json
-
-    current_history.extend(new_qa_pair)
-    cache.set(cache_key, json.dumps(current_history), timeout=3600 * 8)
-
-
 def save_chat_history(chatroom_id, user_question, complete_answer):
     try:
-        chatroom = ChatRoom.objects.get(id=chatroom_id)
-        current_history = chatroom.chat_history if chatroom.chat_history else []
         new_qa_pair = [{"role": 'user', "content": user_question}, {"role": 'assistant', "content": complete_answer}]
-
-        current_history.extend(new_qa_pair)
-        chatroom.chat_history = current_history
-        chatroom.save()
-
-        add_to_cache(chatroom_id, new_qa_pair)
+        cache_chatroom_data(chatroom_id, new_qa_pair)
     except ChatRoom.DoesNotExist:
         return JsonResponse({'error': 'ChatRoom not found'}, status=404)
 
@@ -264,27 +293,9 @@ def create_stream(request, chatroom_id):
         decoded_body = request.body.decode('utf-8')
         data = json.loads(decoded_body)
         user_question = data.get('user_question', '')
-        ocr_cache_key, chat_history_cache_key = f"chatroom_{chatroom_id}_ocr_texts", f"chatroom_{chatroom_id}_chat_history"
-        ocr_texts = cache.get(ocr_cache_key)
-        chat_history_json = cache.get(chat_history_cache_key, '[]')  # 캐시에서 chat_history 데이터 가져오기
+        ocr_text_list, chat_history = cache_chatroom_data(chatroom_id)
+        print("retrieved chat_history", chat_history, type(chat_history))
 
-        if isinstance(chat_history_json, str):
-            chat_history = json.loads(chat_history_json)
-        else:
-            chat_history = chat_history_json
-        if ocr_texts is None or chat_history is None:
-            chatroom = ChatRoom.objects.get(id=chatroom_id)
-            if not ocr_texts:
-                print("ocr cache fail")
-                ocr_texts = chatroom.health_records.all().values_list('ocr_text', flat=True)
-                cache.set(ocr_cache_key, ocr_texts, timeout=3600 * 8)
-            if not chat_history:
-                print("chat history cache fail")
-                chat_history = chatroom.chat_history
-                cache.set(chat_history_cache_key, json.dumps(chat_history), timeout=3600 * 8)
-        else:
-            print("cache hit success:", ocr_texts)
-            print("cache hit success:", chat_history, type(chat_history))
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
@@ -292,12 +303,11 @@ def create_stream(request, chatroom_id):
     client = OpenAI(api_key=api_key)
     system_feature = {
         "role": "system",
-        "content": f"의료 검사지에 대한 상담을 진행한다. 대화 기록을 토대로 이미 대화한 적 있는 내용에 대해서는 간단히 말해라.\
-        반드시 한국말로 답변해라. \
-        또한 아래는 유저가 질의하고싶은 건강검사지의 검사내역이다 {ocr_texts}\
+        "content": f"의료 검사지에 대한 상담을 진행한다.  반드시 한국말로, 의료 상담 관련 분야에 대해서만 간단히 말할 것.\
+        또한 아래는 유저가 질의하고싶은 건강검사지의 검사내역이다 {ocr_text_list}\
         관련질문에 대해 검사내역과 대화 맥락에 기반해 성실히 답변해라"
     }
-    # 의료 상담과 무관한 분야에 대한 질문은 반드시 거절해라.
+
     query = [system_feature]
     if chat_history:
         query.extend(chat_history)
