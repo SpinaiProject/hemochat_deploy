@@ -211,11 +211,21 @@ def delete_chatroom(request, chatroom_id):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def chatroom_detail_view(request, pk):
+def enter_chatroom(request, chatroom_id):
     try:
-        chatroom = ChatRoom.objects.get(pk=pk)
+        chatroom = ChatRoom.objects.get(pk=chatroom_id)
+        if chatroom.entered:
+            return JsonResponse({'error': 'cannot enter while entered'}, status=403)
         serializer = ChatRoomSerializer(chatroom)
-        return JsonResponse(serializer.data, safe=False)
+
+        cache_chatroom_data(chatroom_id)
+
+        chatroom.last_entered = timezone.now()
+        chatroom.entered = True
+        chatroom.leaved = False
+        chatroom.save(update_fields=['last_entered'])
+
+        return CustomJsonResponse(serializer.data, safe=False)
     except ChatRoom.DoesNotExist:
         return JsonResponse({'error': 'ChatRoom not found'}, status=404)
 
@@ -316,3 +326,18 @@ def create_stream(request, chatroom_id):
     response['X-Accel-Buffering'] = 'no'
     response['Cache-Control'] = 'no-cache'
     return response
+
+
+@permission_classes([IsAuthenticated])
+def leave_chatroom(request, chatroom_id):
+    chat_history = cache.get(f"chatroom_{chatroom_id}_chat_history")
+    if chat_history:
+        chatroom = ChatRoom.objects.get(id=chatroom_id)
+        if chatroom.leaved:
+            return JsonResponse({"status": "cannot leave when already left"}, status=403)
+        chatroom.chat_history = json.loads(chat_history)
+        cache.delete(f"chatroom_{chatroom_id}_chat_history")
+        cache.delete(f"chatroom_{chatroom_id}_ocr_texts")
+        chatroom.leaved = True
+        chatroom.save()
+        return JsonResponse({"status": "success"})
