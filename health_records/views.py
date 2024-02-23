@@ -204,14 +204,9 @@ def template_ocr_analysis(request):
                 json_response = response.json()
                 fields = json_response['images'][0]['fields']
                 ocr_data = {field['name']: field['inferText'] for field in fields}
-
-                formatted_json = json.dumps(ocr_data, ensure_ascii=False, indent=4, separators=(',', ': '))
-                with open('ocr_data_formatted.json', 'w', encoding='utf-8') as f:
-                    f.write(formatted_json)
-
-                record.ocr_text = ocr_data
+                ocr_text_json = json.dumps(ocr_data, ensure_ascii=False)
+                record.ocr_text = ocr_text_json
                 record.save()
-
             else:
                 return Response({'error': 'OCR API request failed'}, status=response.status_code)
 

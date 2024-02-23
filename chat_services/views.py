@@ -15,10 +15,10 @@ from rest_framework.permissions import IsAuthenticated
 from .models import *
 from health_records.models import *
 from .serializers import ChatRoomSerializer
+# from .tasks import save_chat_history_to_db
 
 from openai import OpenAI
 import openai
-
 
 
 @api_view(['POST'])
