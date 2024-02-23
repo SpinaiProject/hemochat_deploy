@@ -6,6 +6,7 @@ import time
 from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import JsonResponse, StreamingHttpResponse
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from rest_framework import status
 from rest_framework.decorators import permission_classes, api_view
@@ -171,7 +172,7 @@ def create_chatroom(request):
         data = json.loads(request.body)
         health_record_ids = data.get('record_ids', [])
         if not health_record_ids:
-            raise ValueError("No health record IDs provided.")
+            raise ValueError("No record IDs provided.")
 
         health_records = HealthRecordImage.objects.filter(id__in=health_record_ids)
         found_ids = health_records.values_list('id', flat=True)
