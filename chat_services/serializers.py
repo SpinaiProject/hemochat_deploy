@@ -9,10 +9,13 @@ class ChatRoomSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ChatRoom
-        fields = ['id', 'user', 'health_records', 'recent_chat_history', 'summarized_chat_history']
+        fields = ['id', 'user', 'health_records', 'recent_chat_history', 'summarized_chat_history', 'last_entered',
+                  'entered', 'leaved']
 
     def get_recent_chat_history(self, obj):
-        return json.loads(obj.chat_history)
+        # print(type(obj.chat_history), obj.chat_history)
+        return obj.chat_history
 
     def get_summarized_chat_history(self, obj):
-        return json.loads(obj.summarized_chat_history)
+        # print(type(obj.summarized_chat_history), obj.summarized_chat_history)
+        return obj.summarized_chat_history

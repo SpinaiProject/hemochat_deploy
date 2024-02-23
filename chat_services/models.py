@@ -37,6 +37,8 @@ class ChatRoom(models.Model):
     health_records = models.ManyToManyField('health_records.HealthRecordImage', related_name='chatrooms', blank=True)
     chat_history = models.JSONField(blank=True, default=list)
     summarized_chat_history = models.JSONField(blank=True, default=list)
-
+    last_entered = models.DateTimeField(auto_now=True)
+    entered = models.BooleanField(default=False)
+    leaved = models.BooleanField(default=True)
     def __str__(self):
         return f"ChatRoom {self.id}"
