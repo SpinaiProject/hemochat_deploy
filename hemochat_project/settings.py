@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     'allauth.account',
     'allauth.socialaccount',
     "allauth.socialaccount.providers.kakao",
+    "allauth.socialaccount.providers.google",
 
     # dj_rest_auth
     'dj_rest_auth',
@@ -92,7 +93,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 
     # 추가된 미들웨어
-    'allauth.account.middleware.AccountMiddleware',
+    #'allauth.account.middleware.AccountMiddleware',
     # deploy
     'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
