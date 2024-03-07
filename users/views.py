@@ -230,17 +230,6 @@ class EmailAlreadyExistAPIView(APIView):
             return Response({"exists": False}, status=status.HTTP_200_OK)
 
 
-class UserUpdateView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def patch(self, request, *args, **kwargs):
-        user = request.user
-        serializer = UserUpdateSerializer(user, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 # 전화번호 인증 관련 뷰함수(인증번호 발송, 검증)
 class SendVerificationCodeAPIView(APIView):
@@ -264,5 +253,54 @@ class VerifyPhoneNumberAPIView(APIView):
         user = get_object_or_404(User, phone_number=phone_number)
         if user.verify_phone_number(code):
             return Response({'message': 'Phone number verified.'}, status=status.HTTP_200_OK)
+        else:
+            return Response({'error': 'Invalid verification code.'}, status=status.HTTP_400_BAD_REQUEST)
+
+# 비밀번호 찾기 기능
+class RequestPhoneNumberView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        email = request.data.get('email')
+        if not email:
+            return Response({'error': 'Email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = get_object_or_404(User, username=email)
+        return Response({"message": "Please enter the phone number associated with this account to proceed."},
+                        status=status.HTTP_200_OK)
+
+
+class VerifyPhoneNumberAndSendCodeView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        email = request.data.get('email')
+        input_phone_number = request.data.get('phone_number')
+
+        if not email or not input_phone_number:
+            return Response({'error': 'Email and phone number are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = get_object_or_404(User, username=email)
+        if user.phone_number == input_phone_number:
+            user.send_verification_code()
+            return Response({'message': 'Verification code sent. Please check your phone.'}, status=status.HTTP_200_OK)
+        else:
+            return Response({'error': 'Phone number does not match.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PasswordResetView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        email = request.data.get('email')
+        verification_code = request.data.get('verification_code')
+        new_password = request.data.get('new_password')
+
+        user = get_object_or_404(User, username=email)
+
+        if user.verify_phone_number(verification_code):
+            user.set_password(new_password)
+            user.save()
+            return Response({'message': 'Password has been reset successfully.'}, status=status.HTTP_200_OK)
         else:
             return Response({'error': 'Invalid verification code.'}, status=status.HTTP_400_BAD_REQUEST)
