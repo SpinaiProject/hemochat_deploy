@@ -33,3 +33,21 @@ class User(AbstractUser):
         if not self.random_directory_name:
             self.random_directory_name = get_random_string(20)
         super().save(*args, **kwargs)
+
+    def send_verification_code(self):
+        self.verification_code = '{:06d}'.format(random.randint(0, 999999))
+        self.save()
+        send_sms(self.phone_number, f'[헤모챗] 인증번호는 {self.verification_code}입니다.')
+        success, response = send_sms(self.phone_number, f'[헤모챗] 인증번호는 {self.verification_code}입니다.')
+        if success:
+            print("SMS sent successfully:", response)
+        else:
+            print("Fail to send SMS:", response)
+
+    def verify_phone_number(self, code):
+        if self.verification_code == code:
+            self.phone_verified = True
+            self.verification_code = None
+            self.save()
+            return True
+        return False
