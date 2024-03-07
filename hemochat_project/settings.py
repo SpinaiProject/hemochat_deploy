@@ -183,7 +183,8 @@ REST_FRAMEWORK = {
 }
 
 REST_AUTH_REGISTER_SERIALIZERS = {
-    "REGISTER_SERIALIZER": "user.serializers.SignupSerializer"
+    # "REGISTER_SERIALIZER": "user.serializers.SignupSerializer"
+    "REGISTER_SERIALIZER": "user.serializers.CustomSignupSerializer"
 }
 REST_AUTH_SERIALIZERS = {
     "USER_DETAILS_SERIALIZER": "user.serializers.DetailSerializer"
