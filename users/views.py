@@ -191,6 +191,45 @@ class GoogleLogin(SocialLoginView):
     callback_url = GOOGLE_CALLBACK_URI
     client_class = OAuth2Client
 
+
+class EmailSignupView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        serializer = CustomSignupSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save(request)
+            if user:
+                return Response({"detail": "signed up successfully."}, status=status.HTTP_201_CREATED)
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class EmailAlreadyExistAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        email = request.data.get('email', None)
+
+        if email is None:
+            return Response({"error": "email field not provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user_exists = User.objects.filter(
+            username=email
+        ).exists() or User.objects.filter(
+            kakao_email=email
+        ).exists() or User.objects.filter(
+            google_email=email
+        ).exists()
+
+        if user_exists:
+            return Response({"exists": True}, status=status.HTTP_200_OK)
+        else:
+            return Response({"exists": False}, status=status.HTTP_200_OK)
+
+
 class UserUpdateView(APIView):
     permission_classes = [IsAuthenticated]
 
