@@ -67,3 +67,24 @@ class DetailSerializer(serializers.ModelSerializer):
 
 class IDCheckSerializer(serializers.Serializer):
     is_unique = serializers.BooleanField()
+
+
+class UserUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'password', 'nickname', 'kakao_email', 'google_email',
+                  'gender', 'phone_number']
+        extra_kwargs = {
+            'password': {'write_only': True},
+            'phone_number': {'validators': []},
+        }
+
+    def validate_username(self, value):
+        if User.objects.filter(username=value).exclude(pk=self.instance.pk).exists():
+            raise serializers.ValidationError("This username is already in use.")
+        return value
+
+    def validate_phone_number(self, value):
+        if not value.isdigit() or not len(value) == 11 or not value.startswith('010'):
+            raise serializers.ValidationError("휴대폰 번호는 '010'으로 시작하는 11자리의 숫자여야 합니다.")
+        return value
