@@ -1,21 +1,23 @@
 import os
 from json import JSONDecodeError
-
 import requests
+
 from allauth.socialaccount.providers.oauth2.client import OAuth2Client
 from allauth.socialaccount.providers.kakao import views as kakao_view
 from allauth.socialaccount.providers.google import views as google_view
 from allauth.socialaccount.models import SocialAccount
 from dj_rest_auth.registration.views import SocialLoginView
-from django.contrib.auth.decorators import login_required
+
 from django.http import JsonResponse
-from django.shortcuts import redirect
+from django.shortcuts import redirect, get_object_or_404
 from django.conf import settings
 from rest_framework.decorators import permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework import status, viewsets
+from rest_framework.views import APIView
+from rest_framework.response import Response
 
 from .serializers import *
-from rest_framework import status, viewsets
 
 BASE_URL = settings.BASE_URL
 KAKAO_CALLBACK_URI = settings.BASE_URL + 'api/users/kakao/callback/'
@@ -75,80 +77,6 @@ def kakao_callback(request):
 
     accept_json = accept.json()
     return JsonResponse(accept_json)
-
-
-# def kakao_callback(request):
-#     client_id = os.environ.get('KAKAO_REST_API_KEY')
-#     code = request.GET.get('code')
-#     print("2. code:",code)
-#
-#     # code로 access token 요청
-#     token_request = requests.post(
-#         f"https://kauth.kakao.com/oauth/token?grant_type=authorization_code&client_id={client_id}&redirect_uri={KAKAO_CALLBACK_URI}&code={code}",
-#         headers={"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"},
-#     )
-#
-#     try:
-#         token_response_json = token_request.json()
-#     except ValueError:  # JSON 형식이 아닌 경우 에러 처리
-#         return JsonResponse({'error': 'Invalid response format'}, status=400)
-#
-#     # 에러 발생 시 중단
-#     error = token_response_json.get("error", None)
-#     if error is not None:
-#         return JsonResponse({'error': error}, status=400)
-#
-#     # access token으로 카카오톡 프로필 요청
-#     access_token = token_response_json.get("access_token")
-#     print("3. access_token: " + str(access_token))
-#     profile_request = requests.post(
-#         "https://kapi.kakao.com/v2/user/me",
-#         headers={"Authorization": f"Bearer {access_token}",
-#                  "Content-Type": "application/x-www-form-urlencoded;charset=utf-8"},
-#     )
-#     profile_json = profile_request.json()
-#     print("4. profile: ", profile_json)
-#     kakao_account = profile_json.get("kakao_account")
-#     email = kakao_account.get("email", None)
-#
-#     try:
-#         # 전달받은 닉네임으로 등록된 유저가 있는지 탐색
-#         user = User.objects.get(email=email)
-#         # # FK로 연결되어 있는 socialaccount 테이블에서 해당 닉네임의 유저가 있는지 확인
-#         # social_user = SocialAccount.objects.get(user=user)
-#         #
-#         # # # 있는데 카카오계정이 아니어도 에러
-#         # if social_user.provider != 'kakao':
-#         #     return JsonResponse({'err_msg': 'no matching social type'}, status=status.HTTP_400_BAD_REQUEST)
-#
-#         # 이미 카카오로 제대로 가입된 유저 => 로그인 & 해당 유저의 jwt 발급
-#         data = {'access_token': access_token, 'code': code}
-#         accept = requests.post(KAKAO_FINISH_URI, data=data)
-#         accept_status = accept.status_code
-#
-#         if accept_status != 200:
-#             return JsonResponse({'err_msg': 'failed to signin'}, status=accept_status)
-#
-#         accept_json = accept.json()
-#         print("user found ! jwt_token: " + str(accept_json))
-#         return JsonResponse(accept_json)
-#
-#     except User.DoesNotExist:
-#         # 전달받은 닉네임으로 기존에 가입된 유저가 아예 없으면 => 새로 회원가입 & 해당 유저의 jwt 발급
-#         data = {'access_token': access_token, 'code': code}
-#         accept = requests.post(KAKAO_FINISH_URI, data=data)
-#         accept_status = accept.status_code
-#
-#         # print("accept=>", accept)
-#         if accept_status != 200:
-#             return JsonResponse({'err_msg': 'failed to signup'}, status=accept_status)
-#         accept_json = accept.json()
-#         print("user not found! jwt_token: " + str(accept_json))
-#         return JsonResponse(accept_json)
-
-# except SocialAccount.DoesNotExist:
-#     # User는 있는데 SocialAccount가 없을 때
-#     return JsonResponse({'err_msg': 'username exists but not social user'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class KakaoLogin(SocialLoginView):
@@ -262,3 +190,170 @@ class GoogleLogin(SocialLoginView):
     adapter_class = google_view.GoogleOAuth2Adapter
     callback_url = GOOGLE_CALLBACK_URI
     client_class = OAuth2Client
+
+
+class EmailSignupView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        serializer = CustomSignupSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save(request)
+            if user:
+                return Response({"detail": "signed up successfully."}, status=status.HTTP_201_CREATED)
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class EmailAlreadyExistAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        email = request.data.get('email', None)
+
+        if email is None:
+            return Response({"error": "email field not provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user_exists = User.objects.filter(
+            username=email
+        ).exists() or User.objects.filter(
+            kakao_email=email
+        ).exists() or User.objects.filter(
+            google_email=email
+        ).exists()
+
+        if user_exists:
+            return Response({"exists": True}, status=status.HTTP_200_OK)
+        else:
+            return Response({"exists": False}, status=status.HTTP_200_OK)
+
+# 마이페이지
+class MyPageView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        user = request.user
+        serializer = DetailSerializer(user)
+        return Response(serializer.data)
+
+
+# 개인정보 업데이트
+class UserUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, *args, **kwargs):
+        user = request.user
+        serializer = UserUpdateSerializer(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# 전화번호 인증 관련 뷰함수(인증번호 발송, 검증)
+class SendVerificationCodeAPIView(APIView):
+    def post(self, request, *args, **kwargs):
+        phone_number = request.data.get('phone_number')
+        if phone_number is None:
+            return Response({'error': 'Phone number is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = get_object_or_404(User, phone_number=phone_number)
+        user.send_verification_code()
+        return Response({'message': 'Verification code sent.'}, status=status.HTTP_200_OK)
+
+
+class VerifyPhoneNumberAPIView(APIView):
+    def post(self, request, *args, **kwargs):
+        phone_number = request.data.get('phone_number')
+        code = request.data.get('code')
+        if phone_number is None or code is None:
+            return Response({'error': 'Phone number and code are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = get_object_or_404(User, phone_number=phone_number)
+        if user.verify_phone_number(code):
+            return Response({'message': 'Phone number verified.'}, status=status.HTTP_200_OK)
+        else:
+            return Response({'error': 'Invalid verification code.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+# 이메일 찾기 기능
+class SendEmailVerificationCodeAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        phone_number = request.data.get('phone_number')
+        if phone_number is None:
+            return Response({'error': 'Phone number is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = get_object_or_404(User, phone_number=phone_number)
+        user.send_verification_code()
+        return Response({'message': 'Verification code sent.'}, status=status.HTTP_200_OK)
+
+
+class VerifyPhoneNumberAndReturnEmailAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        phone_number = request.data.get('phone_number')
+        verification_code = request.data.get('code')
+        if phone_number is None or verification_code is None:
+            return Response({'error': 'Phone number and verification code are required.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        user = get_object_or_404(User, phone_number=phone_number)
+        if user.verify_phone_number(verification_code):
+            return Response({'email': user.email}, status=status.HTTP_200_OK)
+        else:
+            return Response({'error': 'Invalid verification code.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+# 비밀번호 찾기 기능
+class RequestPhoneNumberView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        email = request.data.get('email')
+        if not email:
+            return Response({'error': 'Email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = get_object_or_404(User, username=email)
+        return Response({"message": "Please enter the phone number associated with this account to proceed."},
+                        status=status.HTTP_200_OK)
+
+
+class VerifyPhoneNumberAndSendCodeView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        email = request.data.get('email')
+        input_phone_number = request.data.get('phone_number')
+
+        if not email or not input_phone_number:
+            return Response({'error': 'Email and phone number are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = get_object_or_404(User, username=email)
+        if user.phone_number == input_phone_number:
+            user.send_verification_code()
+            return Response({'message': 'Verification code sent. Please check your phone.'}, status=status.HTTP_200_OK)
+        else:
+            return Response({'error': 'Phone number does not match.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PasswordResetView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        email = request.data.get('email')
+        verification_code = request.data.get('verification_code')
+        new_password = request.data.get('new_password')
+
+        user = get_object_or_404(User, username=email)
+
+        if user.verify_phone_number(verification_code):
+            user.set_password(new_password)
+            user.save()
+            return Response({'message': 'Password has been reset successfully.'}, status=status.HTTP_200_OK)
+        else:
+            return Response({'error': 'Invalid verification code.'}, status=status.HTTP_400_BAD_REQUEST)
