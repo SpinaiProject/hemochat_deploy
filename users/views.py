@@ -229,6 +229,15 @@ class EmailAlreadyExistAPIView(APIView):
         else:
             return Response({"exists": False}, status=status.HTTP_200_OK)
 
+# 마이페이지
+class MyPageView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        user = request.user
+        serializer = DetailSerializer(user)
+        return Response(serializer.data)
+
 
 # 개인정보 업데이트
 class UserUpdateView(APIView):
