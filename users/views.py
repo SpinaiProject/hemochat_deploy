@@ -230,6 +230,18 @@ class EmailAlreadyExistAPIView(APIView):
             return Response({"exists": False}, status=status.HTTP_200_OK)
 
 
+# 개인정보 업데이트
+class UserUpdateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, *args, **kwargs):
+        user = request.user
+        serializer = UserUpdateSerializer(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 # 전화번호 인증 관련 뷰함수(인증번호 발송, 검증)
 class SendVerificationCodeAPIView(APIView):
@@ -255,6 +267,38 @@ class VerifyPhoneNumberAPIView(APIView):
             return Response({'message': 'Phone number verified.'}, status=status.HTTP_200_OK)
         else:
             return Response({'error': 'Invalid verification code.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+# 이메일 찾기 기능
+class SendEmailVerificationCodeAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        phone_number = request.data.get('phone_number')
+        if phone_number is None:
+            return Response({'error': 'Phone number is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = get_object_or_404(User, phone_number=phone_number)
+        user.send_verification_code()
+        return Response({'message': 'Verification code sent.'}, status=status.HTTP_200_OK)
+
+
+class VerifyPhoneNumberAndReturnEmailAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        phone_number = request.data.get('phone_number')
+        verification_code = request.data.get('code')
+        if phone_number is None or verification_code is None:
+            return Response({'error': 'Phone number and verification code are required.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        user = get_object_or_404(User, phone_number=phone_number)
+        if user.verify_phone_number(verification_code):
+            return Response({'email': user.email}, status=status.HTTP_200_OK)
+        else:
+            return Response({'error': 'Invalid verification code.'}, status=status.HTTP_400_BAD_REQUEST)
+
 
 # 비밀번호 찾기 기능
 class RequestPhoneNumberView(APIView):
