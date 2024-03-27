@@ -195,8 +195,8 @@ class EmailAlreadyExistAPIView(APIView):
             return Response({"exists": False}, status=status.HTTP_200_OK)
 
 
-class CustomTokenObtainPairView(TokenObtainPairView):
-    serializer_class = CustomTokenObtainPairSerializer
+# class CustomTokenObtainPairView(TokenObtainPairView):
+#     serializer_class = CustomTokenObtainPairSerializer
 
 
 # 마이페이지
