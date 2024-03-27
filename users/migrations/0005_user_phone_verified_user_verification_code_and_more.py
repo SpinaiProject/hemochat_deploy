@@ -10,24 +10,6 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='user',
-            name='phone_verified',
-            field=models.BooleanField(default=False),
-        ),
-        migrations.AddField(
-            model_name='user',
-            name='verification_code',
-            field=models.CharField(blank=True, max_length=6, null=True),
-        ),
-        migrations.AlterField(
-            model_name='user',
-            name='google_email',
-            field=models.EmailField(blank=True, max_length=254, null=True),
-        ),
-        migrations.AlterField(
-            model_name='user',
-            name='kakao_email',
-            field=models.EmailField(blank=True, max_length=254, null=True),
-        ),
+
+
     ]
