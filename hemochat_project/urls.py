@@ -11,7 +11,7 @@ urlpatterns = [
     path('api/health_records/', include("health_records.urls")),
     path('dj-rest-auth/', include('dj_rest_auth.urls')),
     path('dj-rest-auth/registration/', include('dj_rest_auth.registration.urls')),
-
+    path('accounts/', include('allauth.urls')),
     # deploy
     re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
 ]
