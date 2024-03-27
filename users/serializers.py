@@ -13,7 +13,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 
 class CustomSignupSerializer(RegisterSerializer):
-    signup_id = serializers.CharField(max_length=255, required=True)
+    signup_id = serializers.CharField(max_length=255, required=False)
     nickname = serializers.CharField(max_length=100, required=False)
     random_directory_name = serializers.CharField(max_length=20, required=False)
     age = serializers.IntegerField(required=False, allow_null=True)
@@ -23,8 +23,13 @@ class CustomSignupSerializer(RegisterSerializer):
     phone_number = serializers.CharField(max_length=20, required=False, allow_null=True)
 
     def validate_email(self, value):
-        if value and User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("This email is already in use.")
+        user_query = User.objects.filter(email=value)
+        if user_query.exists():
+            user = user_query.first()
+            if user.signup_id:
+                raise serializers.ValidationError("이 이메일은 이미 소셜 로그인으로 가입되었습니다.")
+            else:
+                raise serializers.ValidationError("이 이메일은 이미 사용 중입니다.")
         return value
 
     def validate_password1(self, value):
