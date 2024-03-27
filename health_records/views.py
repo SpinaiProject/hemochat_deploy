@@ -14,6 +14,8 @@ from rest_framework.response import Response
 
 from .models import *
 from .serializers import *
+from openai import OpenAI
+import openai
 
 
 @api_view(['POST'])
@@ -110,6 +112,87 @@ def user_health_records_count(request):
     })
 
 
+def extract_table_data(res):
+    cell_data_list = []
+    ban_words = ['□', '의심']
+    for cell in res["images"][0]["tables"][0]["cells"]:
+        if cell['cellTextLines']:
+            infer_text_fragments = []
+            for text_line in cell['cellTextLines']:
+                for cell_word in text_line['cellWords']:
+                    if not any(ban_word in cell_word['inferText'] for ban_word in ban_words):
+                        infer_text_fragments.append(cell_word['inferText'])
+            infer_text = ' '.join(infer_text_fragments)
+        else:
+            infer_text = None
+
+        cell_data = {
+            "inferText": infer_text,
+            "rowSpan": cell.get('rowSpan', 1),
+            "rowIndex": cell.get('rowIndex', 0),
+            "columnSpan": cell.get('columnSpan', 1),
+            "columnIndex": cell.get('columnIndex', 0)
+        }
+        cell_data_list.append(cell_data)
+
+    return cell_data_list
+
+
+def structure_table_data(raw_data):
+    sorted_cell_data = sorted(raw_data, key=lambda x: (x['rowIndex'], x['columnIndex']))
+    structured_data = {}
+    current_row = None
+    cell_texts = []
+    key = ''
+
+    for cell in sorted_cell_data:
+        if cell['rowSpan'] > 1 or cell['rowIndex'] == 0:
+            continue
+
+        cell_text = cell['inferText'] if cell['inferText'] is not None else ''
+
+        if cell['rowIndex'] != current_row:
+            if current_row is not None and len(cell_text) > 0:
+                structured_data[key] = ' '.join(cell_texts)
+                cell_texts = []
+
+            current_row = cell['rowIndex']
+            key = cell_text
+            structured_data[key] = ''
+        else:
+            cell_texts.append(cell_text)
+
+    if cell_texts:
+        structured_data[key] += ''.join(cell_texts)
+
+    return structured_data
+
+
+def refine_table_data(structured_data):
+    print("재구조화된 정보")
+    print(structured_data)
+    print("================")
+    api_key = os.environ.get('OPEN_AI_API_KEY')
+    client = OpenAI(api_key=api_key)
+
+    system_feature = {
+        "role": "system",
+        "content": "실제 환자의 건강검사지 정보를 key:value 페어로 요약했다. key또는 value가 더미인 것들은 omit해라. "
+                   "value는 환자의 값, 평균치, 상태 분류 등으로 이루어지는데 이 중 환자값과 상태분류로 추정되는 값만 남기고 "
+                   "평균치에 대한 정보는 제외시켜라 평균치는 보통 괄호 내의 숫자범위로 제시된다. "
+                   "너의 응답은 오로지 깔끔하게 정리한 key-pair쌍으로만 이루어져야하고, 그외 다른 어떠한 말도 포함시키지마라"
+    }
+    query = [system_feature, {"role": "user", "content": structured_data}]
+
+    response = client.chat.completions.create(
+        model="gpt-4-0613",
+        messages=query,
+        temperature=0,
+        max_tokens=1024,
+    )
+    return response.choices[0].message.content.strip()
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])  # 헤더에 Authorization': Bearer userToken 형태로 jwt토큰 담아서 요청해야 함
 def general_ocr_analysis(request):
@@ -161,7 +244,10 @@ def general_ocr_analysis(request):
             # record.ocr_text = final_text
             # record.save()
             res = response.json()
-            record.ocr_text = json.dumps(res, ensure_ascii=False, indent=4)
+            raw_table_data = extract_table_data(res)
+            structured_table_data = structure_table_data(raw_table_data)
+            refined_table_data = refine_table_data(json.dumps(structured_table_data, ensure_ascii=False))
+            record.ocr_text = refined_table_data
             record.save()
         else:
             return Response({'error': 'OCR API request failed'}, status=response.status_code)

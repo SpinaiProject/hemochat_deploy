@@ -72,7 +72,7 @@ jobs:
                 - name: DEFAULT_FILE_STORAGE
                   value: storages.backends.s3boto3.S3Boto3Storage
                 - name: OPEN_AI_API_KEY
-                  value: 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
+                  value: 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
                 - name: CELERY_BROKER_URL
                   value: redis://svc.sel5.cloudtype.app:31387
                 - name: CELERY_RESULT_BACKEND
