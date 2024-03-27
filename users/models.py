@@ -2,6 +2,8 @@ import uuid
 import random
 
 from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import UserManager as BaseUserManager
+
 from django.db import models
 from django.utils.crypto import get_random_string
 from .utils import send_sms
@@ -11,6 +13,22 @@ def generate_default_email():
     return str(uuid.uuid4()) + '@example.com'
 
 
+class UserManager(BaseUserManager):
+    def create_user(self, signup_id, password=None, **extra_fields):
+        if not signup_id:
+            raise ValueError('The signup_id must be set')
+        user = self.model(signup_id=signup_id, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, signup_id, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+
+        return self.create_user(signup_id, password, **extra_fields)
+
+
 class User(AbstractUser):
     GENDER_CHOICES = (
         ('M', 'Male'),
@@ -18,20 +36,26 @@ class User(AbstractUser):
         ('O', 'Other'),
     )
     nickname = models.CharField(max_length=100, null=True, blank=True)
-    kakao_email = models.EmailField(null=True, blank=True)
-    google_email = models.EmailField(null=True, blank=True)
+    username = models.CharField(max_length=150, unique=False, blank=True)
+    signup_id = models.CharField(max_length=255, unique=True, blank=True)
     random_directory_name = models.CharField(max_length=20, unique=True, blank=True)
     age = models.PositiveIntegerField(null=True, blank=True)
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES, null=True, blank=True)
     birthday = models.DateField(null=True, blank=True)
     birth_year = models.PositiveIntegerField(null=True, blank=True)
-    phone_number = models.CharField(max_length=20, unique=True, null=True, blank=True)
+    phone_number = models.CharField(max_length=20, null=True, blank=True)
     phone_verified = models.BooleanField(default=False)
     verification_code = models.CharField(max_length=6, blank=True, null=True)
+
+    objects = UserManager()
+    USERNAME_FIELD = 'signup_id'
+    REQUIRED_FIELDS = []
 
     def save(self, *args, **kwargs):
         if not self.random_directory_name:
             self.random_directory_name = get_random_string(20)
+        if not self.username:
+            self.username = get_random_string(10)
         super().save(*args, **kwargs)
 
     def send_verification_code(self):
