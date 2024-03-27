@@ -237,6 +237,12 @@ def general_ocr_analysis(request):
 
         response = requests.post(api_url, headers=headers, json=body)
         if response.status_code == 200:
+            # res = response.json()
+            # infer_texts_generator = extract_infer_text(res)
+            # infer_texts_list = list(infer_texts_generator)
+            # final_text = ' '.join(infer_texts_list)
+            # record.ocr_text = final_text
+            # record.save()
             res = response.json()
             raw_table_data = extract_table_data(res)
             structured_table_data = structure_table_data(raw_table_data)
