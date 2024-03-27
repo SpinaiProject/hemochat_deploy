@@ -15,8 +15,11 @@ def generate_default_email():
 
 class UserManager(BaseUserManager):
     def create_user(self, signup_id, password=None, **extra_fields):
-        if not signup_id:
-            raise ValueError('The signup_id must be set')
+        if not extra_fields.get('random_directory_name'):
+            extra_fields['random_directory_name'] = get_random_string(20)
+        if not extra_fields.get('username'):
+            extra_fields['username'] = get_random_string(10)
+
         user = self.model(signup_id=signup_id, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
@@ -35,10 +38,12 @@ class User(AbstractUser):
         ('F', 'Female'),
         ('O', 'Other'),
     )
+    email = models.EmailField(unique=True, blank=False, null=False)
     nickname = models.CharField(max_length=100, null=True, blank=True)
     username = models.CharField(max_length=150, unique=False, blank=True)
     signup_id = models.CharField(max_length=255, unique=True, blank=True)
     random_directory_name = models.CharField(max_length=20, unique=True, blank=True)
+
     age = models.PositiveIntegerField(null=True, blank=True)
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES, null=True, blank=True)
     birthday = models.DateField(null=True, blank=True)
@@ -48,7 +53,7 @@ class User(AbstractUser):
     verification_code = models.CharField(max_length=6, blank=True, null=True)
 
     objects = UserManager()
-    USERNAME_FIELD = 'signup_id'
+    USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
 
     def save(self, *args, **kwargs):

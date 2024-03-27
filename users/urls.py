@@ -14,7 +14,7 @@ urlpatterns = [
 
     path('email/signup/', EmailSignupView.as_view(), name='email_signup'),
     path('email/login/', TokenObtainPairView.as_view(), name='email_login'),
-    path('email/already_exist/', EmailAlreadyExistAPIView.as_view(), name='email_already_exist'),
+    # path('email/already_exist/', EmailAlreadyExistAPIView.as_view(), name='email_already_exist'),
 
     path('my-page/', MyPageView.as_view(), name='my-page'),
 
