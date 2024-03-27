@@ -78,7 +78,7 @@ def kakao_callback(request):
     accept_status = accept.status_code
 
     if accept_status != 200:
-        return JsonResponse({'err_msg': '로그인 실패'}, status=accept_status)
+        return JsonResponse({'error': '로그인 실패'}, status=accept_status)
 
     accept_json = accept.json()
     return JsonResponse(accept_json)
@@ -130,16 +130,21 @@ def google_callback(request):
     profile_req = requests.get(f"https://www.googleapis.com/oauth2/v1/tokeninfo?access_token={access_token}")
     profile_req_status = profile_req.status_code
     if profile_req_status != 200:
-        return JsonResponse({'err_msg': '회원정보 조회 실패'}, status=status.HTTP_400_BAD_REQUEST)
+        return JsonResponse({'error': '회원정보 조회 실패'}, status=status.HTTP_400_BAD_REQUEST)
 
     profile_req_json = profile_req.json()
     user_id = profile_req_json.get('user_id')
     email = profile_req_json.get('email')
 
-    user, created = User.objects.get_or_create(signup_id=user_id)
-    if created:
-        user.email = email
-        user.save()
+    try:
+        user = User.objects.get(email=email)
+        if user.signup_id:
+            created = False
+        else:
+            return JsonResponse({'error': '이 이메일은 이미 사용 중입니다.'}, status=status.HTTP_400_BAD_REQUEST)
+    except User.DoesNotExist:
+        user = User.objects.create_user(signup_id=user_id, email=email)
+        created = True
 
     token = TokenObtainPairSerializer.get_token(user)
     access_token = str(token.access_token)
@@ -172,27 +177,27 @@ class EmailSignupView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class EmailAlreadyExistAPIView(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request, *args, **kwargs):
-        email = request.data.get('email', None)
-
-        if email is None:
-            return Response({"error": "이메일을 입력하세요"}, status=status.HTTP_400_BAD_REQUEST)
-
-        user_exists = User.objects.filter(
-            username=email
-        ).exists() or User.objects.filter(
-            kakao_email=email
-        ).exists() or User.objects.filter(
-            google_email=email
-        ).exists()
-
-        if user_exists:
-            return Response({"exists": True}, status=status.HTTP_200_OK)
-        else:
-            return Response({"exists": False}, status=status.HTTP_200_OK)
+# class EmailAlreadyExistAPIView(APIView):
+#     permission_classes = [AllowAny]
+#
+#     def post(self, request, *args, **kwargs):
+#         email = request.data.get('email', None)
+#
+#         if email is None:
+#             return Response({"error": "이메일을 입력하세요"}, status=status.HTTP_400_BAD_REQUEST)
+#
+#         user_exists = User.objects.filter(
+#             username=email
+#         ).exists() or User.objects.filter(
+#             kakao_email=email
+#         ).exists() or User.objects.filter(
+#             google_email=email
+#         ).exists()
+#
+#         if user_exists:
+#             return Response({"exists": True}, status=status.HTTP_200_OK)
+#         else:
+#             return Response({"exists": False}, status=status.HTTP_200_OK)
 
 
 # class CustomTokenObtainPairView(TokenObtainPairView):
