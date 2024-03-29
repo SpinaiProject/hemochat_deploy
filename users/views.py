@@ -135,9 +135,9 @@ def google_callback(request):
     error = token_req_json.get("error")
     if error is not None:
         raise ImproperlyConfigured(error)
-    access = token_req_json.get('access')
+    access = token_req_json.get('access_token')
 
-    profile_req = requests.get(f"https://www.googleapis.com/oauth2/v1/tokeninfo?access={access}")
+    profile_req = requests.get(f"https://www.googleapis.com/oauth2/v1/tokeninfo?access_token={access}")
     profile_req_status = profile_req.status_code
     if profile_req_status != 200:
         return JsonResponse({'error': '회원정보 조회 실패'}, status=status.HTTP_400_BAD_REQUEST)
@@ -157,7 +157,7 @@ def google_callback(request):
         created = True
 
     token = TokenObtainPairSerializer.get_token(user)
-    access = str(token.access)
+    access = str(token.access_token)
     refresh = str(token)
 
     return JsonResponse({
