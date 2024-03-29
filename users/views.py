@@ -34,7 +34,7 @@ class UserViewSet(viewsets.ModelViewSet):
     serializer_class = DetailSerializer
 
 
-# api_key => code => access_token => profile
+# api_key => code => access => profile
 def kakao_login(request):
     client_id = os.environ.get("KAKAO_REST_API_KEY")
     print("1. api key: ", client_id)
@@ -61,42 +61,52 @@ def kakao_callback(request):
     if error is not None:
         return JsonResponse({'error': error}, status=400)
 
-    access_token = token_response_json.get("access_token")
+    access = token_response_json.get("access_token")
     profile_request = requests.post(
         "https://kapi.kakao.com/v2/user/me",
-        headers={"Authorization": f"Bearer {access_token}"},
+        headers={
+            "Authorization": f"Bearer {access}",
+            "Content-type": "application/x-www-form-urlencoded;charset=utf-8}"}
     )
     profile_json = profile_request.json()
-    kakao_account = profile_json.get("kakao_account")
-    email = kakao_account.get("email", None)
-    print("profile_json:", profile_json)
-    # 사용자 존재 여부와 관계없이 수행될 로직
-    data = {'access_token': access_token, 'code': code}
-    print("DATA:", data)
-    accept = requests.post(KAKAO_FINISH_URI, data=data)
-    print("FINISH response:", accept)
-    accept_status = accept.status_code
+    # print("profile_json by profile request: ", profile_json)
+    signup_id = profile_json.get("id")
+    email = profile_json.get("kakao_account").get("email", None)
 
-    if accept_status != 200:
-        return JsonResponse({'error': '로그인 실패'}, status=accept_status)
+    try:
+        user = User.objects.get(email=email)
+        if user.signup_id:
+            created = False
+        else:
+            return JsonResponse({'error': '이 이메일은 이미 사용 중입니다.'}, status=status.HTTP_400_BAD_REQUEST)
+    except User.DoesNotExist:
+        user = User.objects.create_user(signup_id=signup_id, email=email)
+        created = True
 
-    accept_json = accept.json()
-    return JsonResponse(accept_json)
+    token = TokenObtainPairSerializer.get_token(user)
+    print("final token:",token)
+    access = str(token.access_token)
+    refresh = str(token)
 
+    return JsonResponse({
+        "created": created,
+        "access": access,
+        "refresh": refresh
+    })
 
-class KakaoLogin(SocialLoginView):
-    adapter_class = kakao_view.KakaoOAuth2Adapter
-    callback_url = KAKAO_CALLBACK_URI
-    client_class = OAuth2Client
+# class KakaoLogin(SocialLoginView):
+#     adapter_class = kakao_view.KakaoOAuth2Adapter
+#     callback_url = KAKAO_CALLBACK_URI
+#     client_class = OAuth2Client
 
 
 @permission_classes([IsAuthenticated])  # 헤더에 Authorization': Bearer userToken 형태로 jwt토큰 담아서 요청해야 함
 def kakao_logout(request):
-    access_token = request.GET.get('access_token')  # 액세스 토큰을 쿼리 파라미터로 넘겨 받아 로그아웃 하는 방식
-    if not access_token:
+    access = request.GET.get('access')  # 액세스 토큰을 쿼리 파라미터로 넘겨 받아 로그아웃 하는 방식
+    if not access:
         return JsonResponse({'error': 'Access token is required'}, status=400)
 
-    headers = {"Authorization": f"Bearer {access_token}"}
+    headers = {"Authorization": f"Bearer {access}"}
     logout_response = requests.post("https://kapi.kakao.com/v1/user/logout", headers=headers)
 
     if logout_response.status_code == 200:
@@ -339,4 +349,3 @@ class PasswordResetView(APIView):
             return Response({'message': '비밀번호가 성공적으로 변경되었습니다.'}, status=status.HTTP_200_OK)
         else:
             return Response({'error': '인증번호가 틀립니다.'}, status=status.HTTP_400_BAD_REQUEST)
-
