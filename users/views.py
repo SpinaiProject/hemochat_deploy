@@ -135,9 +135,9 @@ def google_callback(request):
     error = token_req_json.get("error")
     if error is not None:
         raise ImproperlyConfigured(error)
-    access_token = token_req_json.get('access_token')
+    access = token_req_json.get('access')
 
-    profile_req = requests.get(f"https://www.googleapis.com/oauth2/v1/tokeninfo?access_token={access_token}")
+    profile_req = requests.get(f"https://www.googleapis.com/oauth2/v1/tokeninfo?access={access}")
     profile_req_status = profile_req.status_code
     if profile_req_status != 200:
         return JsonResponse({'error': '회원정보 조회 실패'}, status=status.HTTP_400_BAD_REQUEST)
@@ -157,14 +157,15 @@ def google_callback(request):
         created = True
 
     token = TokenObtainPairSerializer.get_token(user)
-    access_token = str(token.access_token)
-    refresh_token = str(token)
+    access = str(token.access)
+    refresh = str(token)
 
     return JsonResponse({
         "created": created,
-        "access": access_token,
-        "refresh": refresh_token
+        "access": access,
+        "refresh": refresh
     })
+
 
 class GoogleLogin(SocialLoginView):
     adapter_class = google_view.GoogleOAuth2Adapter
@@ -306,13 +307,13 @@ class RequestPhoneNumberForPassword(APIView):
         email = request.data.get('email')
 
         if not email:
-            return Response({'error':'이메일을 입력해주세요'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': '이메일을 입력해주세요'}, status=status.HTTP_400_BAD_REQUEST)
 
         user = User.objects.filter(email=email, signup_id__isnull=True).first()
         if user is not None:
             return Response(status=status.HTTP_200_OK)
         else:
-            return Response({'error':"사용자를 찾을 수 없습니다. 이메일을 확인하고 다시 시도하십시오."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': "사용자를 찾을 수 없습니다. 이메일을 확인하고 다시 시도하십시오."}, status=status.HTTP_404_NOT_FOUND)
 
 
 class VerifyPhoneNumberForPassword(APIView):
