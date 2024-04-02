@@ -41,7 +41,11 @@ class UserViewSet(viewsets.ModelViewSet):
 
 def kakao_login(request):
     client_id = os.environ.get('KAKAO_REST_API_KEY')
-    code = request.GET.get('code')
+    try:
+        data = json.loads(request.body)
+        code = data.get('code')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': '잘못된 요청입니다. JSON 형식이 올바른지 확인해 주세요.'}, status=status.HTTP_400_BAD_REQUEST)
 
     # code로 access token 요청
     token_request = requests.post(
