@@ -1,4 +1,5 @@
 import os,json
+from json import JSONDecodeError
 import requests
 
 from allauth.socialaccount.providers.oauth2.client import OAuth2Client
