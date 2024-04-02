@@ -23,8 +23,7 @@ from .serializers import *
 
 BASE_URL = settings.BASE_URL
 KAKAO_FRONT_REDIRECT = os.environ.get('FRONT_KAKAO_REDIRECT')
-# KAKAO_FINISH_URI = settings.BASE_URL + 'api/users/kakao/login/finish/'
-GOOGLE_CALLBACK_URI = settings.BASE_URL + 'api/users/google/callback/'
+GOOGLE_CALLBACK_URI = os.environ.get('FRONT_GOOGLE_REDIRECT')
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -114,14 +113,14 @@ def kakao_logout(request):
         return JsonResponse({'error': '로그아웃 실패'}, status=logout_response.status_code)
 
 
+# def google_login(request):
+#     scope = "https://www.googleapis.com/auth/userinfo.email"
+#     client_id = os.environ.get("SOCIAL_AUTH_GOOGLE_CLIENT_ID")
+#     return redirect(
+#         f"https://accounts.google.com/o/oauth2/v2/auth?client_id={client_id}&redirect_uri={GOOGLE_CALLBACK_URI}&response_type=code&scope={scope}")
+
+
 def google_login(request):
-    scope = "https://www.googleapis.com/auth/userinfo.email"
-    client_id = os.environ.get("SOCIAL_AUTH_GOOGLE_CLIENT_ID")
-    return redirect(
-        f"https://accounts.google.com/o/oauth2/v2/auth?client_id={client_id}&redirect_uri={GOOGLE_CALLBACK_URI}&response_type=code&scope={scope}")
-
-
-def google_callback(request):
     client_id = os.environ.get("SOCIAL_AUTH_GOOGLE_CLIENT_ID")
     client_secret = os.environ.get("SOCIAL_AUTH_GOOGLE_SECRET")
     state = os.environ.get("STATE")
