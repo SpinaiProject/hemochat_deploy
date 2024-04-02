@@ -22,9 +22,8 @@ from rest_framework.response import Response
 from .serializers import *
 
 BASE_URL = settings.BASE_URL
-KAKAO_CALLBACK_URI = settings.BASE_URL + 'api/users/kakao/callback/'
-KAKAO_FINISH_URI = settings.BASE_URL + 'api/users/kakao/login/finish/'
-# GOOGLE_CALLBACK_URI = settings.BASE_URL + 'api/users/google/callback/'
+KAKAO_FRONT_REDIRECT = os.environ.get('FRONT_KAKAO_REDIRECT')
+# KAKAO_FINISH_URI = settings.BASE_URL + 'api/users/kakao/login/finish/'
 GOOGLE_CALLBACK_URI = settings.BASE_URL + 'api/users/google/callback/'
 
 
@@ -34,21 +33,20 @@ class UserViewSet(viewsets.ModelViewSet):
     serializer_class = DetailSerializer
 
 
-# api_key => code => access => profile
+# def kakao_login(request):
+#     client_id = os.environ.get("KAKAO_REST_API_KEY")
+#     print("1. api key: ", client_id)
+#     return redirect(
+#         f"https://kauth.kakao.com/oauth/authorize?client_id={client_id}&redirect_uri={KAKAO_FRONT_REDIRECT}&response_type=code&scope=account_email")
+
+
 def kakao_login(request):
-    client_id = os.environ.get("KAKAO_REST_API_KEY")
-    print("1. api key: ", client_id)
-    return redirect(
-        f"https://kauth.kakao.com/oauth/authorize?client_id={client_id}&redirect_uri={KAKAO_CALLBACK_URI}&response_type=code&scope=account_email")
-
-
-def kakao_callback(request):
     client_id = os.environ.get('KAKAO_REST_API_KEY')
     code = request.GET.get('code')
 
     # code로 access token 요청
     token_request = requests.post(
-        f"https://kauth.kakao.com/oauth/token?grant_type=authorization_code&client_id={client_id}&redirect_uri={KAKAO_CALLBACK_URI}&code={code}",
+        f"https://kauth.kakao.com/oauth/token?grant_type=authorization_code&client_id={client_id}&redirect_uri={KAKAO_FRONT_REDIRECT}&code={code}",
         headers={"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"},
     )
 
@@ -96,7 +94,7 @@ def kakao_callback(request):
 
 # class KakaoLogin(SocialLoginView):
 #     adapter_class = kakao_view.KakaoOAuth2Adapter
-#     callback_url = KAKAO_CALLBACK_URI
+#     callback_url = KAKAO_FRONT_REDIRECT
 #     client_class = OAuth2Client
 
 
