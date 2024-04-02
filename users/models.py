@@ -47,7 +47,6 @@ class User(AbstractUser):
     age = models.PositiveIntegerField(null=True, blank=True)
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES, null=True, blank=True)
     birthday = models.DateField(null=True, blank=True)
-    birth_year = models.PositiveIntegerField(null=True, blank=True)
     phone_number = models.CharField(max_length=20, null=True, blank=True)
     phone_verified = models.BooleanField(default=False)
     verification_code = models.CharField(max_length=6, blank=True, null=True)

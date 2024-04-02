@@ -85,7 +85,6 @@ def kakao_login(request):
         created = True
 
     token = TokenObtainPairSerializer.get_token(user)
-    print("final token:",token)
     access = str(token.access_token)
     refresh = str(token)
 

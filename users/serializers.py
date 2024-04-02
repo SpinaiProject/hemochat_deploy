@@ -82,7 +82,7 @@ class CustomSignupSerializer(RegisterSerializer):
 class DetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['signup_id', 'username', 'nickname', 'random_directory_name', 'age', 'gender',
+        fields = ['username', 'nickname', 'age', 'gender',
                   'birthday', 'birth_year', 'phone_number']
 
 
