@@ -15,6 +15,8 @@ def generate_default_email():
 
 class UserManager(BaseUserManager):
     def create_user(self, signup_id, password=None, **extra_fields):
+        if not signup_id:
+            signup_id = None
         if not extra_fields.get('random_directory_name'):
             extra_fields['random_directory_name'] = get_random_string(20)
         if not extra_fields.get('username'):
@@ -41,7 +43,7 @@ class User(AbstractUser):
     email = models.EmailField(unique=True, blank=False, null=False)
     nickname = models.CharField(max_length=100, null=True, blank=True)
     username = models.CharField(max_length=150, unique=False, blank=True)
-    signup_id = models.CharField(max_length=255, unique=True, blank=True)
+    signup_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
     random_directory_name = models.CharField(max_length=20, unique=True, blank=True)
 
     age = models.PositiveIntegerField(null=True, blank=True)
