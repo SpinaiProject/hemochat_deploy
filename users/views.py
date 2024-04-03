@@ -1,4 +1,4 @@
-import os
+import os,json
 from json import JSONDecodeError
 import requests
 
@@ -41,7 +41,11 @@ class UserViewSet(viewsets.ModelViewSet):
 
 def kakao_login(request):
     client_id = os.environ.get('KAKAO_REST_API_KEY')
-    code = request.GET.get('code')
+    try:
+        data = json.loads(request.body)
+        code = data.get('code')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': '잘못된 요청입니다. JSON 형식이 올바른지 확인해 주세요.'}, status=status.HTTP_400_BAD_REQUEST)
 
     # code로 access token 요청
     token_request = requests.post(
@@ -123,7 +127,11 @@ def google_login(request):
     client_id = os.environ.get("SOCIAL_AUTH_GOOGLE_CLIENT_ID")
     client_secret = os.environ.get("SOCIAL_AUTH_GOOGLE_SECRET")
     state = os.environ.get("STATE")
-    code = request.GET.get('code')
+    try:
+        data = json.loads(request.body)
+        code = data.get('code')
+    except json.JSONDecodeError:
+        return JsonResponse({'error': '잘못된 요청입니다. JSON 형식이 올바른지 확인해 주세요.'}, status=status.HTTP_400_BAD_REQUEST)
     token_req = requests.post(
         f"https://oauth2.googleapis.com/token?client_id={client_id}&client_secret={client_secret}&code={code}&grant_type=authorization_code&redirect_uri={GOOGLE_CALLBACK_URI}&state={state}")
 
