@@ -7,7 +7,7 @@ import users.models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('users', '0002_user_age_user_birth_year_user_birthday_user_gender_and_more'),
+        ('users', '0001_initial'),
     ]
 
     operations = [
