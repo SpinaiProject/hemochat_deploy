@@ -16,6 +16,7 @@ class HealthRecordFolder(models.Model):
 
 class HealthRecordImage(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    title = models.CharField(max_length=50, null=True,blank=True)
     folder = models.ForeignKey(HealthRecordFolder, related_name='images', on_delete=models.CASCADE)
     image = models.ImageField(upload_to=user_directory_path)
     ocr_text = models.TextField(blank=True)

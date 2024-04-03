@@ -33,6 +33,7 @@ class ChatThread(models.Model):
 # 아래는 Assistant API Streaming이 지원되지 않을 때 사용할 모델들
 class ChatRoom(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    title = models.CharField(max_length=50)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     health_records = models.ManyToManyField('health_records.HealthRecordImage', related_name='chatrooms', blank=True)
     chat_history = models.JSONField(blank=True, default=list)
