@@ -44,6 +44,7 @@ def kakao_login(request):
     try:
         data = json.loads(request.body)
         code = data.get('code')
+        print(code)
     except json.JSONDecodeError:
         return JsonResponse({'error': '잘못된 요청입니다. JSON 형식이 올바른지 확인해 주세요.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -57,7 +58,7 @@ def kakao_login(request):
         token_response_json = token_request.json()
     except ValueError:
         return JsonResponse({'error': 'Invalid response format'}, status=400)
-
+    print(token_response_json)
     error = token_response_json.get("error", None)
     if error is not None:
         return JsonResponse({'error': error}, status=400)
@@ -116,11 +117,11 @@ def kakao_logout(request):
         return JsonResponse({'error': '로그아웃 실패'}, status=logout_response.status_code)
 
 
-# def google_login(request):
-#     scope = "https://www.googleapis.com/auth/userinfo.email"
-#     client_id = os.environ.get("SOCIAL_AUTH_GOOGLE_CLIENT_ID")
-#     return redirect(
-#         f"https://accounts.google.com/o/oauth2/v2/auth?client_id={client_id}&redirect_uri={GOOGLE_CALLBACK_URI}&response_type=code&scope={scope}")
+def test(request):
+    scope = "https://www.googleapis.com/auth/userinfo.email"
+    client_id = os.environ.get("SOCIAL_AUTH_GOOGLE_CLIENT_ID")
+    return redirect(
+        f"https://accounts.google.com/o/oauth2/v2/auth?client_id={client_id}&redirect_uri={GOOGLE_CALLBACK_URI}&response_type=code&scope={scope}")
 
 
 def google_login(request):
@@ -138,7 +139,7 @@ def google_login(request):
         'client_secret': client_secret,
         'code': code,
         'grant_type': 'authorization_code',
-        'redirect_uri': os.environ.get("GOOGLE_CALLBACK_URI")
+        'redirect_uri': GOOGLE_CALLBACK_URI
     }
     token_req = requests.post("https://oauth2.googleapis.com/token", data=token_req_data)
     token_req_json = token_req.json()
