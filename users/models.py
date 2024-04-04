@@ -17,8 +17,6 @@ def generate_default_email():
 
 class UserManager(BaseUserManager):
     def validate_password(self, password):
-        if not password:
-            raise ValidationError("비밀번호를 입력해야 합니다.")
         if len(password) < 8:
             raise ValidationError("비밀번호는 최소 8자 이상이어야 합니다.")
         if not re.findall(r'[A-Za-z]', password):
@@ -39,7 +37,8 @@ class UserManager(BaseUserManager):
             extra_fields['username'] = get_random_string(10)
 
         user = self.model(signup_id=signup_id, **extra_fields)
-        self.validate_password(password)
+        if password:
+            self.validate_password(password)
         user.set_password(password)
         user.save(using=self._db)
         return user
