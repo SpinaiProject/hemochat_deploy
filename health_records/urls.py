@@ -9,6 +9,6 @@ urlpatterns = [
     path('delete_health_records/', delete_health_records, name='delete_health_records'),
     path('user_health_records_count/', user_health_records_count, name='user_health_records_count'),
     path('general_ocr_analysis/', general_ocr_analysis, name='general_ocr_analysis'),
-    path('template_ocr_analysis/', template_ocr_analysis, name='template_ocr_analysis'),
-    path('template_ocr_analysis_for_gpt/', template_ocr_analysis_for_gpt, name='template_ocr_analysis_for_gpt'),
+    # path('template_ocr_analysis/', template_ocr_analysis, name='template_ocr_analysis'),
+    # path('template_ocr_analysis_for_gpt/', template_ocr_analysis_for_gpt, name='template_ocr_analysis_for_gpt'),
 ]
