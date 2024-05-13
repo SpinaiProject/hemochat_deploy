@@ -22,39 +22,39 @@ OPEN_AI_CHAT_INSTRUCTION = os.environ.get('OPEN_AI_CHAT_INSTRUCTION')
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def create_assistant_config(request):
-    user = request.user
-    if not user.is_authenticated:
-        return JsonResponse({"error": "User is not authenticated."}, status=401)
-    api_key = os.environ.get('OPEN_AI_API_KEY')
-    client = OpenAI(api_key=api_key)
-
-    if not api_key:
-        return JsonResponse({"error": "API key is missing."}, status=400)
+def create_chatroom(request):
     try:
-        name = "의료 상담 전문 채팅앱"
-        my_assistant = client.beta.assistants.create(
-            instructions="""제공받은 의료검사 정보를 분석하고 검색하여, 해당 건강 수치들이 정상 범위 내에 있는지 확인합니다.
-정상 범위를 벗어난 경우 필요한 의학적 조치를 한국어로 상담해주며, 수치에 대한 의학적 정보에 대한 질의가 있을 때는
-그에 대한 상세한 개념 설명을 제공합니다. 모든 상담은 한국어로 진행됩니다.""",
-            name="name",
-            tools=[{"type": "retrieval"}],
-            model="gpt-4-turbo-preview",
-        )
+        user = request.user
+        client = openai.OpenAI(api_key=OPEN_AI_API_KEY)
 
-    except Exception as e:
-        return JsonResponse({"error": f"Unexpected error: {str(e)}"}, status=500)
+        data = json.loads(request.body)
+        record_ids = data.get('record_ids')
+        title = data.get('title')
+        if not title:
+            return Response({"error": "채팅방 제목을 기입하세요."}, status=400)
+        records = HealthRecordImage.objects.filter(pk__in=record_ids)
+        if not records.exists():
+            return Response({"error": "이미지를 선택하지 않았거나 존재하지 않는 이미지입니다."}, status=400)
 
-    try:
-        assistant_config = AssistantConfig.objects.create(
+        init_messages = [{"role": "assistant", "content": OPEN_AI_CHAT_INSTRUCTION}]
+        init_messages.extend([{"role": "user", "content": record.ocr_text} for record in records])
+        empty_chatroom = client.beta.threads.create(messages=init_messages)
+        chatroom = ChatRoom.objects.create(
             user=user,
-            name=name,
-            api_key=api_key,
-            model="gpt-4",
-            active=True
+            chatroom_id=empty_chatroom.id,
+            title=title
         )
+        chatroom.health_records.set(records)
+
+        update_chatroom_cache_on_create(user.id, chatroom, records)
+
+        return Response({
+            "message": "채팅방이 생성되었습니다",
+            "thread_id": chatroom.chatroom_id
+        })
     except Exception as e:
-        return JsonResponse({"error": f"Database error: {str(e)}"}, status=500)
+        return Response({"error": str(e)}, status=500)
+
 
     return JsonResponse({
         "message": "Assistant Config Successfully Created.",
