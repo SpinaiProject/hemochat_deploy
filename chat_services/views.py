@@ -177,15 +177,29 @@ class EventHandler(AssistantEventHandler):
                         print(f"\n{output.logs}", flush=True)
 
 
-def save_chat_history(chatroom_id, user_question, complete_answer):
-    try:
-        new_qa_pair = [{"role": 'user', "content": user_question}, {"role": 'assistant', "content": complete_answer}]
-        cache_chatroom_data(chatroom_id, new_qa_pair)
-    except ChatRoom.DoesNotExist:
-        return JsonResponse({'error': 'ChatRoom not found'}, status=404)
+def update_chatroom_cache(chatroom_id, content, accumulated_responses):
+    current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    new_user_message = {
+        "created_at": current_time,
+        "role": "user",
+        "text": content
+    }
+
+    new_system_message = {
+        "created_at": current_time,
+        "role": "assistant",
+        "text": " ".join(accumulated_responses)
+    }
+
+    cache_key = f"chatroom_{chatroom_id}_details"
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        data = json.loads(cached_data)
+        data['messages'].extend([new_user_message, new_system_message])
+        cache.set(cache_key, json.dumps(data), timeout=900)
 
 
-@require_http_methods(["POST"])
+@api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_stream(request, chatroom_id):
     try:
