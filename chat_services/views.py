@@ -201,49 +201,39 @@ def update_chatroom_cache(chatroom_id, content, accumulated_responses):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def create_stream(request, chatroom_id):
-    try:
-        decoded_body = request.body.decode('utf-8')
-        data = json.loads(decoded_body)
-        user_question = data.get('user_question', '')
-        ocr_text_list, chat_history = cache_chatroom_data(chatroom_id)
-        print("retrieved chat_history", chat_history, type(chat_history))
-
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid JSON'}, status=400)
-
-    api_key = os.environ.get('OPEN_AI_API_KEY')
-    client = OpenAI(api_key=api_key)
-    system_feature = {
-        "role": "system",
-        "content": f"의료 검사지에 대한 상담을 진행한다.  반드시 한국말로, 의료 상담 관련 분야에 대해서만 간단히 말할 것.\
-        또한 아래는 유저가 질의하고싶은 건강검사지의 검사내역이다 {ocr_text_list}\
-        관련질문에 대해 검사내역과 대화 맥락에 기반해 성실히 답변해라"
-    }
-
-    query = [system_feature]
-    if chat_history:
-        query.extend(chat_history)
-    query.append({"role": "user", "content": user_question})
-    print("final query:", query)
-    complete_answer = ""
+def create_message(request, chatroom_id):
+    user = request.user
+    client = openai.OpenAI(api_key=OPEN_AI_API_KEY)
+    assistant_id = OPEN_AI_ASSISTANT_ID
+    content = request.data.get("content")
 
     def event_stream():
-        nonlocal complete_answer
-        for chunk in client.chat.completions.create(
-                model="gpt-4-0613",
-                messages=query,
-                stream=True,
-        ):
-            chunk_message = chunk.choices[0].delta.content
-            state = chunk.choices[0].finish_reason
-            if state == 'stop':
-                save_chat_history(chatroom_id, user_question, complete_answer)
-                print("user_question:", user_question, "\ncomplete_answer", complete_answer)
-                break
-            else:
-                complete_answer += chunk_message
-            yield f"data: {chunk_message}\n\n"
+        accumulated_responses = []
+        try:
+            message = client.beta.threads.messages.create(
+                thread_id=chatroom_id,
+                role="user",
+                content=content,
+            )
+
+            with client.beta.threads.runs.stream(
+                    thread_id=chatroom_id,
+                    assistant_id=assistant_id,
+                    instructions=content,
+                    event_handler=EventHandler(),
+
+            ) as stream:
+                for event in stream:
+                    if event.event == 'thread.message.delta':
+                        text_value = event.data.delta.content[0].text.value
+                        accumulated_responses.append(text_value)
+                        yield f"data: {json.dumps(text_value, ensure_ascii=False)}\n\n"
+
+        except Exception as e:
+            yield f"data: {{\"error\": \"{str(e)}\"}}\n\n"
+        finally:
+            if accumulated_responses:
+                update_chatroom_cache(chatroom_id, content, accumulated_responses)
 
     response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
     response['X-Accel-Buffering'] = 'no'
