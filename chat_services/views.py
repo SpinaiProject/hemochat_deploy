@@ -137,86 +137,44 @@ def enter_chatroom(request, chatroom_id):
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
 def delete_chatroom(request, chatroom_id):
-    chatroom = get_object_or_404(ChatRoom, id=chatroom_id)
-
-    if chatroom.user != request.user:
-        return JsonResponse({
-            'message': 'You do not have permission to delete this chatroom.'
-        }, status=status.HTTP_403_FORBIDDEN)
-
-    chatroom.delete()
-    return JsonResponse({
-        'message': 'ChatRoom deleted successfully.'
-    }, status=status.HTTP_200_OK)
-
-
-def cache_chatroom_data(chatroom_id, new_qa_pair=None):
-    ocr_cache_key = f"chatroom_{chatroom_id}_ocr_texts"
-    chat_history_cache_key = f"chatroom_{chatroom_id}_chat_history"
-
-    ocr_texts = cache.get(ocr_cache_key)
-    chat_history_json = cache.get(chat_history_cache_key)
-
     try:
-        chatroom = ChatRoom.objects.get(id=chatroom_id)
-
-        if not ocr_texts:
-            ocr_texts = list(chatroom.health_records.all().values_list('ocr_text', flat=True))
-            cache.set(ocr_cache_key, ocr_texts, timeout=600)
-
-        if chat_history_json is None:
-            chat_history = chatroom.chat_history if chatroom.chat_history else []
-            print("read from db or new: ", chat_history, type(chat_history))
-            print("dumped and cached: ", json.dumps(chat_history, ensure_ascii=False),
-                  type(json.dumps(chat_history, ensure_ascii=False)))
-            cache.set(chat_history_cache_key, json.dumps(chat_history, ensure_ascii=False), timeout=600)
+        user = request.user
+        chatroom = user.chatrooms.get(chatroom_id=chatroom_id)
+        client = openai.OpenAI(api_key=OPEN_AI_API_KEY)
+        success = client.beta.threads.delete(chatroom.chatroom_id)
+        if success:
+            chatroom.delete()
+            cache.delete(f"user_{user.id}_chatrooms")
+            cache.delete(f"chatroom_{chatroom_id}_details")
+            return Response({'message': '채팅방이 삭제되었습니다'}, status=204)
         else:
-            print("before loading: ", chat_history_json, type(chat_history_json))
-            chat_history = json.loads(chat_history_json)
-            print("loaded to python dictionary list: ", chat_history, type(chat_history))
-
-    except ObjectDoesNotExist:
-        return None, None
-
-    if new_qa_pair:
-        print("before extend: ", chat_history, type(chat_history))
-        chat_history.extend(new_qa_pair)
-        print("new_qa_pair: ", new_qa_pair, type(new_qa_pair))
-        print("appended new chat: ", chat_history, type(chat_history))
-        print("dumped and cached: ", json.dumps(chat_history, ensure_ascii=False),
-              type(json.dumps(chat_history, ensure_ascii=False)))
-        cache.set(chat_history_cache_key, json.dumps(chat_history, ensure_ascii=False), timeout=600)
-
-    return ocr_texts, chat_history
-
-
-class CustomJsonResponse(JsonResponse):
-    def __init__(self, data, encoder=json.JSONEncoder, safe=True, json_dumps_params=None, **kwargs):
-        if json_dumps_params is None:
-            json_dumps_params = {}
-        json_dumps_params["ensure_ascii"] = False
-        super().__init__(data, encoder=encoder, safe=safe, json_dumps_params=json_dumps_params, **kwargs)
-
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def enter_chatroom(request, chatroom_id):
-    try:
-        chatroom = ChatRoom.objects.get(pk=chatroom_id)
-        if chatroom.entered:
-            return JsonResponse({'error': 'cannot enter while entered'}, status=403)
-        serializer = ChatRoomSerializer(chatroom)
-
-        cache_chatroom_data(chatroom_id)
-
-        chatroom.last_entered = timezone.now()
-        chatroom.entered = True
-        chatroom.leaved = False
-        chatroom.save(update_fields=['last_entered'])
-
-        return CustomJsonResponse(serializer.data, safe=False)
+            return Response({'message': '채팅방 삭제 실패'}, status=400)
     except ChatRoom.DoesNotExist:
-        return JsonResponse({'error': 'ChatRoom not found'}, status=404)
+        return Response({'error': '존재하지 않는 채팅방입니다'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+class EventHandler(AssistantEventHandler):
+        @override
+        def on_text_created(self, text) -> None:
+            print(f"\nassistant > ", end="", flush=True)
+
+        @override
+        def on_text_delta(self, delta, snapshot):
+            print(delta.value, end="", flush=True)
+
+    def on_tool_call_created(self, tool_call):
+        print(f"\nassistant > {tool_call.type}\n", flush=True)
+
+    def on_tool_call_delta(self, delta, snapshot):
+        if delta.type == 'code_interpreter':
+            if delta.code_interpreter.input:
+                print(delta.code_interpreter.input, end="", flush=True)
+            if delta.code_interpreter.outputs:
+                print(f"\n\noutput >", flush=True)
+                for output in delta.code_interpreter.outputs:
+                    if output.type == "logs":
+                        print(f"\n{output.logs}", flush=True)
 
 
 def save_chat_history(chatroom_id, user_question, complete_answer):
