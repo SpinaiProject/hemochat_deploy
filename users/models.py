@@ -39,7 +39,8 @@ class UserManager(BaseUserManager):
             extra_fields['username'] = get_random_string(10)
 
         user = self.model(signup_id=signup_id, **extra_fields)
-        self.validate_password(password)
+        if password:
+            self.validate_password(password)
         user.set_password(password)
         user.save(using=self._db)
         return user
