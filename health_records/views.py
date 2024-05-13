@@ -29,10 +29,6 @@ def upload_images(request):
 
     images_files = request.FILES.getlist('images')
     valid_extensions = ['.png', '.jpg', '.jpeg']
-    folder = HealthRecordFolder(user=request.user)
-    folder.save()
-
-    urls = []
 
     for image_file in images_files:
         if not any(image_file.name.endswith(ext) for ext in valid_extensions):
@@ -41,16 +37,16 @@ def upload_images(request):
             return Response({'error': "각 이미지 사이즈는 10MB를 넘길 수 없습니다."}, status=400)
 
         try:
-            health_record_image = HealthRecordImage(folder=folder, image=image_file, user=user)
+            health_record_image = HealthRecordImage(image=image_file, user=user)
             health_record_image.save()
-            cloudfront_domain_name = os.environ.get('IMAGE_CUSTOM_DOMAIN')
-            s3_object_key = health_record_image.image.name
-            cloudfront_url = f'{cloudfront_domain_name}/{s3_object_key}'
-            urls.append(cloudfront_url)
+            # cloudfront_domain_name = os.environ.get('IMAGE_CUSTOM_DOMAIN')
+            # s3_object_key = health_record_image.image.name
+            # cloudfront_url = f'{cloudfront_domain_name}/{s3_object_key}'
+            # urls.append(cloudfront_url)
         except Exception as e:
             return Response({'error': str(e)}, status=500)
 
-    return Response({'message': '이미지가 정상 업로드 되었습니다', 'url': urls})
+    return Response({'message': '이미지가 정상 업로드 되었습니다'})
 
 
 @api_view(['GET'])
