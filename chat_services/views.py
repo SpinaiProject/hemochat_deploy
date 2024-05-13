@@ -163,18 +163,18 @@ class EventHandler(AssistantEventHandler):
         def on_text_delta(self, delta, snapshot):
             print(delta.value, end="", flush=True)
 
-    def on_tool_call_created(self, tool_call):
-        print(f"\nassistant > {tool_call.type}\n", flush=True)
+        def on_tool_call_created(self, tool_call):
+            print(f"\nassistant > {tool_call.type}\n", flush=True)
 
-    def on_tool_call_delta(self, delta, snapshot):
-        if delta.type == 'code_interpreter':
-            if delta.code_interpreter.input:
-                print(delta.code_interpreter.input, end="", flush=True)
-            if delta.code_interpreter.outputs:
-                print(f"\n\noutput >", flush=True)
-                for output in delta.code_interpreter.outputs:
-                    if output.type == "logs":
-                        print(f"\n{output.logs}", flush=True)
+        def on_tool_call_delta(self, delta, snapshot):
+            if delta.type == 'code_interpreter':
+                if delta.code_interpreter.input:
+                    print(delta.code_interpreter.input, end="", flush=True)
+                if delta.code_interpreter.outputs:
+                    print(f"\n\noutput >", flush=True)
+                    for output in delta.code_interpreter.outputs:
+                        if output.type == "logs":
+                            print(f"\n{output.logs}", flush=True)
 
 
 def update_chatroom_cache(chatroom_id, content, accumulated_responses):
