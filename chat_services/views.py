@@ -56,10 +56,24 @@ def create_chatroom(request):
         return Response({"error": str(e)}, status=500)
 
 
-    return JsonResponse({
-        "message": "Assistant Config Successfully Created.",
-        "assistant_id": my_assistant.id
-    })
+def update_chatroom_cache_on_create(user_id, chatroom, records):
+    cache_key = f"user_{user_id}_chatrooms"
+    representative_image = records.first().image.url if records.exists() else None
+
+    chatroom_data = {
+        "chatroom_id": chatroom.chatroom_id,
+        "title": chatroom.title,
+        "updated_at": chatroom.updated_at.strftime('%Y-%m-%d %H:%M:%S'),
+        "representative_image": representative_image
+    }
+
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        data = json.loads(cached_data)
+        data.append(chatroom_data)
+        cache.set(cache_key, json.dumps(data), timeout=900)
+    else:
+        cache.set(cache_key, json.dumps([chatroom_data]), timeout=900)
 
 
 @api_view(['POST'])
