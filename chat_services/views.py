@@ -95,106 +95,43 @@ def list_chatroom(request):
         return Response({'error': str(e)}, status=400)
 
 
-@api_view(['POST'])
+@api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def create_message(request):
-    if request.method == "POST":
-        api_key = os.environ.get('OPEN_AI_API_KEY')
-        client = OpenAI(api_key=api_key)
-        thread_id = request.POST.get("thread_id")
-        content = request.POST.get("content")
-
-        try:
-            message = client.beta.threads.messages.create(
-                thread_id=thread_id,
-                role="user",
-                content=content,
-            )
-
-            assistant_id = request.POST.get("assistant_id")
-            run = client.beta.threads.runs.create(
-                thread_id=thread_id,
-                assistant_id=assistant_id
-            )
-            run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
-
-            while True:
-                if run.status == "completed":
-                    break
-                run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run.id)
-                print(run)
-                time.sleep(1)
-
-            messages = client.beta.threads.messages.list(thread_id=thread_id)
-
-            return JsonResponse({
-                "message": "Message successfully created.",
-                "thread_question": content,
-                "thread_answer": messages.data[0].content[0].text.value
-            })
-        except Exception as e:
-            return JsonResponse({"error": str(e)}, status=500)
-    else:
-        return JsonResponse({"error": "Invalid request method."}, status=400)
-
-
-# @require_http_methods(["POST"])
-# def create_run(request):
-#     api_key = os.environ.get('OPEN_AI_API_KEY')
-#     client = OpenAI(api_key=api_key)
-#     thread_id = request.POST.get("thread_id")
-#     assistant_id = request.POST.get("assistant_id")
-#
-#     if not thread_id or not assistant_id:
-#         return JsonResponse({"error": "Missing thread_id or assistant_id"}, status=400)
-#
-#     try:
-#         run = client.beta.threads.runs.create(
-#             thread_id=thread_id,
-#             assistant_id=assistant_id
-#         )
-#
-#         return JsonResponse({
-#             "status": "success",
-#             "data": run
-#         })
-#     except Exception as e:
-#         return JsonResponse({
-#             "status": "error",
-#             "message": str(e)
-#         }, status=500)
-
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def create_chatroom(request):
-    user = request.user
-    chatroom = ChatRoom.objects.create(user=user)
-
+def enter_chatroom(request, chatroom_id):
     try:
-        data = json.loads(request.body)
-        health_record_ids = data.get('record_ids', [])
-        if not health_record_ids:
-            raise ValueError("No record IDs provided.")
+        user = request.user
+        cache_key = f"chatroom_{chatroom_id}_details"
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return Response(json.loads(cached_data))
 
-        health_records = HealthRecordImage.objects.filter(id__in=health_record_ids)
-        found_ids = health_records.values_list('id', flat=True)
-        not_found_ids = set(health_record_ids) - set(found_ids)
+        chatroom = user.chatrooms.get(chatroom_id=chatroom_id)
+        serializer = ChatRoomDetailSerializer(chatroom)
 
-        if not_found_ids:
-            raise ObjectDoesNotExist(f"HealthRecordImage not found for IDs: {not_found_ids}")
+        client = openai.Client(api_key=OPEN_AI_API_KEY)
+        thread_messages = client.beta.threads.messages.list(chatroom.chatroom_id)
+        total_messages = []
+        for message in thread_messages:
+            for content_block in message.content:
+                created_at_datetime = datetime.datetime.fromtimestamp(message.created_at)
+                formatted_created_at = created_at_datetime.strftime('%Y-%m-%d %H:%M:%S')
+                total_messages.append({
+                    "created_at": formatted_created_at,
+                    "role": message.role,
+                    "text": content_block.text.value
+                })
+        total_messages.reverse()
 
-        chatroom.health_records.set(health_records)
-    except (ValueError, ObjectDoesNotExist) as e:
-        return JsonResponse({
-            'message': 'Error processing your request. Please check the provided health record IDs.',
-            'error': str(e)
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-    return JsonResponse({
-        'message': 'ChatRoom created successfully with health records.',
-        'chatroom_id': str(chatroom.id)
-    }, status=status.HTTP_200_OK)
+        response_data = {
+            'chatroom': serializer.data,
+            'messages': total_messages
+        }
+        cache.set(cache_key, json.dumps(response_data), timeout=900)
+        return Response(response_data)
+    except ChatRoom.DoesNotExist:
+        return Response({'error': '존재하지 않는 채팅방입니다'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
 
 
 @api_view(['DELETE'])
