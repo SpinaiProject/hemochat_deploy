@@ -78,30 +78,21 @@ def update_chatroom_cache_on_create(user_id, chatroom, records):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def create_thread(request):
+def list_chatroom(request):
     try:
         user = request.user
+        cache_key = f"user_{user.id}_chatrooms"
+        cached_chatrooms = cache.get(cache_key)
+        if cached_chatrooms:
+            return Response(json.loads(cached_chatrooms))
 
-        api_key = os.environ.get('OPEN_AI_API_KEY')
-        if not api_key:
-            return JsonResponse({"error": "API key is missing."}, status=400)
+        chatrooms = user.chatrooms.all()
+        serializer = ChatRoomListSerializer(chatrooms, many=True)
+        cache.set(cache_key, json.dumps(serializer.data), timeout=600)
 
-        client = openai.OpenAI(api_key=api_key)
-        empty_thread = client.beta.threads.create()
-        chat_thread = ChatThread.objects.create(
-            user=user,
-            thread_id=empty_thread.id
-        )
-
-        return JsonResponse({
-            "message": "Chat Thread Successfully Created.",
-            "thread_id": chat_thread.thread_id
-        })
-    except KeyError:
-        return JsonResponse({"error": "Failed to create chat thread due to missing data from OpenAI response"},
-                            status=500)
+        return Response(serializer.data)
     except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
+        return Response({'error': str(e)}, status=400)
 
 
 @api_view(['POST'])
