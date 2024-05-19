@@ -24,6 +24,7 @@ class Migration(migrations.Migration):
             name='HealthRecordImage',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('title', models.CharField(blank=True, max_length=50, null=True)),
                 ('image', models.ImageField(upload_to=health_records.models.user_directory_path)),
                 ('ocr_text', models.TextField(blank=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),

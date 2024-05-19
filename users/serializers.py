@@ -1,7 +1,10 @@
 import re
 from .models import User
 from rest_framework import serializers
+from django.core.exceptions import ValidationError
+from django.core.validators import EmailValidator
 from dj_rest_auth.registration.serializers import RegisterSerializer
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 
 # class SignupSerializer(RegisterSerializer):
@@ -10,9 +13,8 @@ from dj_rest_auth.registration.serializers import RegisterSerializer
 
 
 class CustomSignupSerializer(RegisterSerializer):
+    signup_id = serializers.CharField(max_length=255, required=False)
     nickname = serializers.CharField(max_length=100, required=False)
-    kakao_email = serializers.EmailField(required=False, allow_null=True)
-    google_email = serializers.EmailField(required=False, allow_null=True)
     random_directory_name = serializers.CharField(max_length=20, required=False)
     age = serializers.IntegerField(required=False, allow_null=True)
     gender = serializers.ChoiceField(choices=User.GENDER_CHOICES, required=False, allow_null=True)
@@ -20,14 +22,14 @@ class CustomSignupSerializer(RegisterSerializer):
     birth_year = serializers.IntegerField(required=False, allow_null=True)
     phone_number = serializers.CharField(max_length=20, required=False, allow_null=True)
 
-    def validate_kakao_email(self, value):
-        if value and User.objects.filter(kakao_email=value).exists():
-            raise serializers.ValidationError("This kakao_email is already in use.")
-        return value
-
-    def validate_google_email(self, value):
-        if value and User.objects.filter(google_email=value).exists():
-            raise serializers.ValidationError("This google_email is already in use.")
+    def validate_email(self, value):
+        user_query = User.objects.filter(email=value)
+        if user_query.exists():
+            user = user_query.first()
+            if user.signup_id:
+                raise serializers.ValidationError("이 이메일은 이미 소셜 로그인으로 가입되었습니다.")
+            else:
+                raise serializers.ValidationError("이 이메일은 이미 사용 중입니다.")
         return value
 
     def validate_password1(self, value):
@@ -45,23 +47,42 @@ class CustomSignupSerializer(RegisterSerializer):
 
     def save(self, request):
         user = super().save(request)
-        user.nickname = self.validated_data.get('nickname')
-        user.kakao_email = self.validated_data.get('kakao_email', None)
-        user.google_email = self.validated_data.get('google_email', None)
+        user.nickname = self.validated_data.get('nickname', None)
         user.random_directory_name = self.validated_data.get('random_directory_name', None)
         user.age = self.validated_data.get('age', None)
         user.gender = self.validated_data.get('gender', None)
         user.birthday = self.validated_data.get('birthday', None)
         user.birth_year = self.validated_data.get('birth_year', None)
         user.phone_number = self.validated_data.get('phone_number', None)
+        user.signup_id = self.validated_data.get('signup_id')
         user.save()
         return user
 
 
+# class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+#     username_field = User.EMAIL_FIELD
+#
+#     def validate(self, attrs):
+#         email_validator = EmailValidator()
+#         email = attrs.get('email', '')
+#
+#         try:
+#             email_validator(email)
+#         except ValidationError:
+#             raise ValidationError('Invalid email format.')
+#         attrs['username'] = attrs['email']
+#         return super().validate(attrs)
+#
+#     @classmethod
+#     def get_token(cls, user):
+#         token = super().get_token(user)
+#         token['email'] = user.email
+#         return token
+
 class DetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['username', 'nickname', 'kakao_email', 'google_email', 'random_directory_name', 'age', 'gender',
+        fields = ['username', 'nickname', 'age', 'gender',
                   'birthday', 'birth_year', 'phone_number']
 
 
@@ -72,8 +93,7 @@ class IDCheckSerializer(serializers.Serializer):
 class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'nickname', 'kakao_email', 'google_email',
-                  'gender', 'phone_number']
+        fields = ['password', 'nickname', 'phone_number']
         extra_kwargs = {
             'password': {'write_only': True},
             'phone_number': {'validators': []},
@@ -81,7 +101,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 
     def validate_username(self, value):
         if User.objects.filter(username=value).exclude(pk=self.instance.pk).exists():
-            raise serializers.ValidationError("This username is already in use.")
+            raise serializers.ValidationError("이미 사용중인 이메일입니다")
         return value
 
     def validate_phone_number(self, value):

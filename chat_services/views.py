@@ -94,7 +94,6 @@ def list_chatroom(request):
     except Exception as e:
         return Response({'error': str(e)}, status=400)
 
-
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def enter_chatroom(request, chatroom_id):
@@ -132,6 +131,7 @@ def enter_chatroom(request, chatroom_id):
         return Response({'error': '존재하지 않는 채팅방입니다'}, status=404)
     except Exception as e:
         return Response({'error': str(e)}, status=500)
+
 
 
 @api_view(['DELETE'])
@@ -353,6 +353,7 @@ def create_message(request, chatroom_id):
 #         return CustomJsonResponse(serializer.data, safe=False)
 #     except ChatRoom.DoesNotExist:
 #         return JsonResponse({'error': 'ChatRoom not found'}, status=404)
+
 
 
 # @require_http_methods(["POST"])
