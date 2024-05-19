@@ -184,12 +184,12 @@ def create_chatroom(request):
         chatroom.health_records.set(health_records)
     except (ValueError, ObjectDoesNotExist) as e:
         return JsonResponse({
-            'message': 'Error processing your request. Please check the provided health record IDs.',
+            'message': '검사지를 선택하지않았거나 존재하지 않는 검사지입니다',
             'error': str(e)
         }, status=status.HTTP_400_BAD_REQUEST)
 
     return JsonResponse({
-        'message': 'ChatRoom created successfully with health records.',
+        'message': '채팅방이 건강 검사지와 함께 성공적으로 생성되었습니다.',
         'chatroom_id': str(chatroom.id)
     }, status=status.HTTP_200_OK)
 
@@ -201,12 +201,12 @@ def delete_chatroom(request, chatroom_id):
 
     if chatroom.user != request.user:
         return JsonResponse({
-            'message': 'You do not have permission to delete this chatroom.'
+            'message': '채팅방 삭제 권한이 없습니다'
         }, status=status.HTTP_403_FORBIDDEN)
 
     chatroom.delete()
     return JsonResponse({
-        'message': 'ChatRoom deleted successfully.'
+        'message': '정상적으로 채팅방을 나갔습니다'
     }, status=status.HTTP_200_OK)
 
 
@@ -345,10 +345,10 @@ def leave_chatroom(request, chatroom_id):
     if chat_history:
         chatroom = ChatRoom.objects.get(id=chatroom_id)
         if chatroom.leaved:
-            return JsonResponse({"status": "cannot leave when already left"}, status=403)
+            return JsonResponse({"status": "이미 나간 상태에서는 나갈 수 없습니다"}, status=403)
         chatroom.chat_history = json.loads(chat_history)
         cache.delete(f"chatroom_{chatroom_id}_chat_history")
         cache.delete(f"chatroom_{chatroom_id}_ocr_texts")
         chatroom.leaved = True
         chatroom.save()
-        return JsonResponse({"status": "success"})
+        return JsonResponse({"status": "채팅방을 나갔습니다"})

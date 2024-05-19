@@ -54,6 +54,7 @@ def upload_images(request):
     return Response({'message': '이미지가 정상 업로드 되었습니다'})
 
 
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])  # 헤더에 Authorization': Bearer userToken 형태로 jwt토큰 담아서 요청해야 함
 def user_health_records(request):
@@ -159,7 +160,7 @@ def format_ocr_data(ocr_data, row_threshold=10, column_threshold=50):
     return result_text.strip()
 
 
-def extract_orc_texts(record):
+def extract_ocr_texts(record):
     api_url = GENERAL_OCR_API_URL
     secret_key = GENERAL_OCR_SECRET_KEY
 
@@ -210,7 +211,7 @@ def general_ocr_analysis(request):
 
     try:
         target_record = HealthRecordImage.objects.get(user=request.user, pk=record_id)
-        structured_data = extract_orc_texts(target_record)
+        structured_data = extract_ocr_texts(target_record)
     except Exception as e:
         return Response({'errors': '이미지 분석 오류 발생'}, status=500)
 

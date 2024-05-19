@@ -5,16 +5,16 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 urlpatterns = [
     path('kakao/login/', kakao_login, name='kakao_login'),
     path('kakao/logout/', kakao_logout, name='kakao_logout'),
-    path('kakao/callback/', kakao_callback, name='kakao_callback'),
-    path('kakao/login/finish/', KakaoLogin.as_view(), name='kakao_login_todoclass'),
+    # path('kakao/callback/', kakao_callback, name='kakao_callback'),
+    # path('kakao/login/finish/', KakaoLogin.as_view(), name='kakao_login_todoclass'),
 
     path('google/login/', google_login, name='google_login'),
-    path('google/callback/', google_callback, name='google_callback'),
-    path('google/login/finish/', GoogleLogin.as_view(), name='google_login_todjango'),
+    # path('google/callback/', google_callback, name='google_callback'),
+    # path('google/login/finish/', GoogleLogin.as_view(), name='google_login_todjango'),
 
     path('email/signup/', EmailSignupView.as_view(), name='email_signup'),
-    path('email/login/', CustomTokenObtainPairView.as_view(), name='email_login'),
-    path('email/already_exist/', EmailAlreadyExistAPIView.as_view(), name='email_already_exist'),
+    path('email/login/', TokenObtainPairView.as_view(), name='email_login'),
+    # path('email/already_exist/', EmailAlreadyExistAPIView.as_view(), name='email_already_exist'),
 
     path('my-page/', MyPageView.as_view(), name='my-page'),
 
