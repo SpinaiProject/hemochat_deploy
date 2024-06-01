@@ -201,34 +201,57 @@ def extract_ocr_texts(record):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def general_ocr_analysis(request):
     client = OpenAI(api_key=OPEN_AI_API_KEY)
 
     record_id = request.data.get('record_id', None)
-    if not record_id:
-        return Response({'error': '이미지를 선택해주세요'}, status=400)
+    chatroom_id = request.data.get('chatroom_id', None)
+
+    if not record_id and not chatroom_id:
+        return Response({'error': 'record_id 또는 chatroom_id를 제공해야 합니다.'}, status=400)
+
+    target_record = None
+    if not chatroom_id:
+        if not request.user.is_authenticated:
+            return Response({'error': '로그인이 필요합니다.'}, status=401)
+        try:
+            target_record = HealthRecordImage.objects.get(user=request.user, pk=record_id)
+        except HealthRecordImage.DoesNotExist:
+            return Response({'error': '해당 이미지를 찾을 수 없습니다.'}, status=404)
+    else:
+        try:
+            target_record = TempChatroom.objects.get(chatroom_id=chatroom_id)
+        except TempChatroom.DoesNotExist:
+            return Response({'error': '해당 채팅방을 찾을 수 없습니다.'}, status=404)
 
     try:
-        target_record = HealthRecordImage.objects.get(user=request.user, pk=record_id)
         structured_data = extract_ocr_texts(target_record)
     except Exception as e:
         return Response({'errors': '이미지 분석 오류 발생'}, status=500)
 
-    query = [{"role": "system","content": OPEN_AI_INSTRUCTION}, {"role": "user", "content": structured_data}]
+    query = [{"role": "system", "content": OPEN_AI_INSTRUCTION}, {"role": "user", "content": structured_data}]
     complete_analysis_result = ""
+
     def event_stream():
         nonlocal complete_analysis_result
         for chunk in client.chat.completions.create(
-                model="gpt-4-0613",
+                model="gpt-4-turbo",
                 messages=query,
                 stream=True,
         ):
             chunk_message = chunk.choices[0].delta.content
             state = chunk.choices[0].finish_reason
             if state == 'stop':
-                target_record.ocr_text = complete_analysis_result
-                target_record.save()
+                if isinstance(target_record, HealthRecordImage):
+                    target_record.ocr_text = complete_analysis_result
+                    target_record.save()
+                elif isinstance(target_record, TempChatroom):
+                    client.beta.threads.messages.create(
+                        thread_id=chatroom_id,
+                        role="assistant",
+                        content=OPEN_AI_CHAT_INSTRUCTION + complete_analysis_result,
+                    )
                 break
             else:
                 complete_analysis_result += chunk_message
