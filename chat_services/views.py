@@ -267,17 +267,14 @@ def update_chatroom_cache(chatroom_id, content, accumulated_responses):
         data['messages'].extend([new_user_message, new_system_message])
         cache.set(cache_key, json.dumps(data), timeout=900)
 
-
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def create_message(request, chatroom_id):
-    user = request.user
-    client = openai.OpenAI(api_key=OPEN_AI_API_KEY)
-    assistant_id = OPEN_AI_ASSISTANT_ID
     content = request.data.get("content")
 
     def event_stream():
         accumulated_responses = []
+
         try:
             message = client.beta.threads.messages.create(
                 thread_id=chatroom_id,
@@ -290,7 +287,6 @@ def create_message(request, chatroom_id):
                     assistant_id=assistant_id,
                     instructions=content,
                     event_handler=EventHandler(),
-
             ) as stream:
                 for event in stream:
                     if event.event == 'thread.message.delta':
@@ -303,6 +299,13 @@ def create_message(request, chatroom_id):
         finally:
             if accumulated_responses:
                 update_chatroom_cache(chatroom_id, content, accumulated_responses)
+            if not request.user.is_authenticated:
+                try:
+                    temp_chatroom = get_object_or_404(TempChatroom, chatroom_id=chatroom_id)
+                    temp_chatroom.chat_num += 1
+                    temp_chatroom.save()
+                except ValidationError as ve:
+                    yield f"data: {{\"error\": \"{str(ve)}\"}}\n\n"
 
     response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
     response['X-Accel-Buffering'] = 'no'
