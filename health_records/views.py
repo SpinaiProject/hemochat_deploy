@@ -17,12 +17,34 @@ from .serializers import *
 from openai import OpenAI
 import openai
 
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+
 OPEN_AI_API_KEY = os.environ.get('OPEN_AI_API_KEY')
 GENERAL_OCR_API_URL = os.environ.get('GENERAL_OCR_API_URL')
 GENERAL_OCR_SECRET_KEY = os.environ.get('GENERAL_OCR_SECRET_KEY')
 OPEN_AI_INSTRUCTION = os.environ.get('OPEN_AI_INSTRUCTION')
 
 
+# @swagger_auto_schema(
+#     method='post',
+#     manual_parameters=[
+#         openapi.Parameter(
+#             'images',
+#             openapi.IN_FORM,
+#             description="업로드할 이미지/폴더",
+#             type=openapi.TYPE_FILE,
+#             required=True,
+#             multiple=True
+#         ),
+#     ],
+#     responses={
+#         200: openapi.Response(description="이미지가 정상 업로드 되었습니다"),
+#         400: openapi.Response(description="Bad request"),
+#         401: openapi.Response(description="Unauthorized"),
+#         500: openapi.Response(description="Internal server error")
+#     }
+# )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])  # 헤더에 Authorization': Bearer userToken 형태로 jwt토큰 담아서 요청해야 함
 def upload_images(request):
@@ -81,6 +103,25 @@ def date_filtered_user_health_records(request):
     return Response(serializer.data)
 
 
+@swagger_auto_schema(
+    method='delete',
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'record_ids': openapi.Schema(
+                type=openapi.TYPE_ARRAY,
+                items=openapi.Items(type=openapi.TYPE_INTEGER),
+                description='삭제할 검사지 ID 리스트'
+            )
+        },
+        required=['record_ids']
+    ),
+    responses={
+        200: openapi.Response(description="성공적으로 삭제되었습니다"),
+        400: openapi.Response(description="삭제할 검사지를 선택하세요"),
+        404: openapi.Response(description="존재하지 않는 검사지에 대한 요청입니다"),
+    }
+)
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])  # 헤더에 Authorization': Bearer userToken 형태로 jwt토큰 담아서 요청해야 함
 def delete_health_records(request):
@@ -200,6 +241,37 @@ def extract_ocr_texts(record):
         return json.dumps(structured_table_data, ensure_ascii=False)
 
 
+record_id_schema = openapi.Schema(
+    type=openapi.TYPE_OBJECT,
+    properties={
+        'record_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='Record ID'),
+    },
+    required=['record_id'],
+    description="정식채팅방"
+)
+
+chatroom_id_schema = openapi.Schema(
+    type=openapi.TYPE_OBJECT,
+    properties={
+        'chatroom_id': openapi.Schema(type=openapi.TYPE_STRING, description='Chatroom ID'),
+    },
+    required=['chatroom_id'],
+    description="임시채팅방"
+)
+@swagger_auto_schema(
+    method='post',
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        oneOf=[record_id_schema, chatroom_id_schema],
+    ),
+    responses={
+        200: openapi.Response(description="OCR 분석이 성공적으로 완료되었습니다"),
+        400: openapi.Response(description="record_id 또는 chatroom_id를 제공해야 합니다."),
+        401: openapi.Response(description="로그인이 필요합니다."),
+        404: openapi.Response(description="해당 이미지를 찾을 수 없습니다."),
+        500: openapi.Response(description="이미지 분석 오류 발생")
+    }
+)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def general_ocr_analysis(request):
