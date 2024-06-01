@@ -4,8 +4,14 @@ import os
 
 from django.core.cache import cache
 from django.http import JsonResponse, StreamingHttpResponse
+from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import UploadedFile
+from django.shortcuts import get_object_or_404
+
+from rest_framework import status
 from rest_framework.decorators import permission_classes, api_view
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
+
 from rest_framework.response import Response
 
 from .serializers import *
@@ -16,8 +22,72 @@ from typing_extensions import override
 from openai import AssistantEventHandler
 
 OPEN_AI_API_KEY = os.environ.get('OPEN_AI_API_KEY')
-OPEN_AI_ASSISTANT_ID = os.environ.get('OPEN_AI_ASSISTANT_ID')
+assistant_id = os.environ.get('OPEN_AI_ASSISTANT_ID')
 OPEN_AI_CHAT_INSTRUCTION = os.environ.get('OPEN_AI_CHAT_INSTRUCTION')
+client = openai.OpenAI(api_key=OPEN_AI_API_KEY)
+
+ALLOWED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png']
+MAX_IMAGE_SIZE_MB = 5
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def create_temp_chatroom(request):
+    try:
+        empty_chatroom = client.beta.threads.create()
+        chatroom = TempChatroom.objects.create(
+            chatroom_id=empty_chatroom.id
+        )
+        return Response({
+            'chatroom_id': chatroom.chatroom_id,
+        }, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({
+            'error': 'An unexpected error occurred: {}'.format(str(e))
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+def validate_image(image: UploadedFile):
+    ext = os.path.splitext(image.name)[1].lower()
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+        raise ValidationError('Unsupported file extension.')
+
+    if image.size > MAX_IMAGE_SIZE_MB * 1024 * 1024:
+        raise ValidationError('File size exceeds the allowed limit of 5MB.')
+
+    valid_mime_types = ['image/jpeg', 'image/png', 'image/gif']
+    if image.content_type not in valid_mime_types:
+        raise ValidationError('Unsupported file type.')
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def upload_temp_image(request, chatroom_id):
+    try:
+        chatroom = TempChatroom.objects.get(chatroom_id=chatroom_id)
+        if 'image' not in request.FILES:
+            return Response({'error': 'No image file provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        image = request.FILES['image']
+
+        try:
+            validate_image(image)
+        except ValidationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        chatroom.image = image
+        chatroom.save()
+
+        return Response({
+            'chatroom_id': chatroom.chatroom_id,
+            'image_url': chatroom.image.url if chatroom.image else None
+        }, status=status.HTTP_200_OK)
+
+    except TempChatroom.DoesNotExist:
+        return Response({'error': 'Chatroom not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': f'An error occurred while updating the image: {str(e)}'},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
@@ -25,8 +95,6 @@ OPEN_AI_CHAT_INSTRUCTION = os.environ.get('OPEN_AI_CHAT_INSTRUCTION')
 def create_chatroom(request):
     try:
         user = request.user
-        client = openai.OpenAI(api_key=OPEN_AI_API_KEY)
-
         data = json.loads(request.body)
         record_ids = data.get('record_ids')
         title = data.get('title')
@@ -37,7 +105,7 @@ def create_chatroom(request):
             return Response({"error": "이미지를 선택하지 않았거나 존재하지 않는 이미지입니다."}, status=400)
 
         init_messages = [{"role": "assistant", "content": OPEN_AI_CHAT_INSTRUCTION}]
-        init_messages.extend([{"role": "user", "content": record.ocr_text} for record in records])
+        init_messages.extend([{"role": "assistant", "content": record.ocr_text} for record in records])
         empty_chatroom = client.beta.threads.create(messages=init_messages)
         chatroom = ChatRoom.objects.create(
             user=user,
@@ -94,6 +162,7 @@ def list_chatroom(request):
     except Exception as e:
         return Response({'error': str(e)}, status=400)
 
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def enter_chatroom(request, chatroom_id):
@@ -107,18 +176,23 @@ def enter_chatroom(request, chatroom_id):
         chatroom = user.chatrooms.get(chatroom_id=chatroom_id)
         serializer = ChatRoomDetailSerializer(chatroom)
 
-        client = openai.Client(api_key=OPEN_AI_API_KEY)
         thread_messages = client.beta.threads.messages.list(chatroom.chatroom_id)
         total_messages = []
+        user_message_found = False
         for message in thread_messages:
-            for content_block in message.content:
-                created_at_datetime = datetime.datetime.fromtimestamp(message.created_at)
-                formatted_created_at = created_at_datetime.strftime('%Y-%m-%d %H:%M:%S')
-                total_messages.append({
-                    "created_at": formatted_created_at,
-                    "role": message.role,
-                    "text": content_block.text.value
-                })
+            if message.role == 'user':
+                user_message_found = True
+
+            if user_message_found:
+                for content_block in message.content:
+                    created_at_datetime = datetime.datetime.fromtimestamp(message.created_at)
+                    formatted_created_at = created_at_datetime.strftime('%Y-%m-%d %H:%M:%S')
+                    total_messages.append({
+                        "created_at": formatted_created_at,
+                        "role": message.role,
+                        "text": content_block.text.value
+                    })
+
         total_messages.reverse()
 
         response_data = {
@@ -133,10 +207,10 @@ def enter_chatroom(request, chatroom_id):
         return Response({'error': str(e)}, status=500)
 
 
-
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
 def delete_chatroom(request, chatroom_id):
+    global client
     try:
         user = request.user
         chatroom = user.chatrooms.get(chatroom_id=chatroom_id)
@@ -154,27 +228,28 @@ def delete_chatroom(request, chatroom_id):
     except Exception as e:
         return Response({'error': str(e)}, status=400)
 
+
 class EventHandler(AssistantEventHandler):
-        @override
-        def on_text_created(self, text) -> None:
-            print(f"\nassistant > ", end="", flush=True)
+    @override
+    def on_text_created(self, text) -> None:
+        print(f"\nassistant > ", end="", flush=True)
 
-        @override
-        def on_text_delta(self, delta, snapshot):
-            print(delta.value, end="", flush=True)
+    @override
+    def on_text_delta(self, delta, snapshot):
+        print(delta.value, end="", flush=True)
 
-        def on_tool_call_created(self, tool_call):
-            print(f"\nassistant > {tool_call.type}\n", flush=True)
+    def on_tool_call_created(self, tool_call):
+        print(f"\nassistant > {tool_call.type}\n", flush=True)
 
-        def on_tool_call_delta(self, delta, snapshot):
-            if delta.type == 'code_interpreter':
-                if delta.code_interpreter.input:
-                    print(delta.code_interpreter.input, end="", flush=True)
-                if delta.code_interpreter.outputs:
-                    print(f"\n\noutput >", flush=True)
-                    for output in delta.code_interpreter.outputs:
-                        if output.type == "logs":
-                            print(f"\n{output.logs}", flush=True)
+    def on_tool_call_delta(self, delta, snapshot):
+        if delta.type == 'code_interpreter':
+            if delta.code_interpreter.input:
+                print(delta.code_interpreter.input, end="", flush=True)
+            if delta.code_interpreter.outputs:
+                print(f"\n\noutput >", flush=True)
+                for output in delta.code_interpreter.outputs:
+                    if output.type == "logs":
+                        print(f"\n{output.logs}", flush=True)
 
 
 def update_chatroom_cache(chatroom_id, content, accumulated_responses):
@@ -198,17 +273,14 @@ def update_chatroom_cache(chatroom_id, content, accumulated_responses):
         data['messages'].extend([new_user_message, new_system_message])
         cache.set(cache_key, json.dumps(data), timeout=900)
 
-
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def create_message(request, chatroom_id):
-    user = request.user
-    client = openai.OpenAI(api_key=OPEN_AI_API_KEY)
-    assistant_id = OPEN_AI_ASSISTANT_ID
     content = request.data.get("content")
 
     def event_stream():
         accumulated_responses = []
+
         try:
             message = client.beta.threads.messages.create(
                 thread_id=chatroom_id,
@@ -221,7 +293,6 @@ def create_message(request, chatroom_id):
                     assistant_id=assistant_id,
                     instructions=content,
                     event_handler=EventHandler(),
-
             ) as stream:
                 for event in stream:
                     if event.event == 'thread.message.delta':
@@ -234,6 +305,13 @@ def create_message(request, chatroom_id):
         finally:
             if accumulated_responses:
                 update_chatroom_cache(chatroom_id, content, accumulated_responses)
+            if not request.user.is_authenticated:
+                try:
+                    temp_chatroom = get_object_or_404(TempChatroom, chatroom_id=chatroom_id)
+                    temp_chatroom.chat_num += 1
+                    temp_chatroom.save()
+                except ValidationError as ve:
+                    yield f"data: {{\"error\": \"{str(ve)}\"}}\n\n"
 
     response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
     response['X-Accel-Buffering'] = 'no'
@@ -355,75 +433,3 @@ def create_message(request, chatroom_id):
 #         return JsonResponse({'error': 'ChatRoom not found'}, status=404)
 
 
-
-# @require_http_methods(["POST"])
-# @permission_classes([IsAuthenticated])
-# def create_stream(request, chatroom_id):
-#     try:
-#         decoded_body = request.body.decode('utf-8')
-#         data = json.loads(decoded_body)
-#         user_question = data.get('user_question', '')
-#         ocr_text_list, chat_history = cache_chatroom_data(chatroom_id)
-#         print("retrieved chat_history", chat_history, type(chat_history))
-#
-#     except json.JSONDecodeError:
-#         return JsonResponse({'error': 'Invalid JSON'}, status=400)
-#
-#     api_key = os.environ.get('OPEN_AI_API_KEY')
-#     client = OpenAI(api_key=api_key)
-#     system_feature = {
-#         "role": "system",
-#         "content": f"의료 검사지에 대한 상담을 진행한다.  반드시 한국말로, 의료 상담 관련 분야에 대해서만 간단히 말할 것.\
-#         또한 아래는 유저가 질의하고싶은 건강검사지의 검사내역이다 {ocr_text_list}\
-#         관련질문에 대해 검사내역과 대화 맥락에 기반해 성실히 답변해라"
-#     }
-#
-#     query = [system_feature]
-#     if chat_history:
-#         query.extend(chat_history)
-#     query.append({"role": "user", "content": user_question})
-#     print("final query:", query)
-#     complete_answer = ""
-#
-#     def event_stream():
-#         nonlocal complete_answer
-#         for chunk in client.chat.completions.create(
-#                 model="gpt-4-0613",
-#                 messages=query,
-#                 stream=True,
-#         ):
-#             chunk_message = chunk.choices[0].delta.content
-#             state = chunk.choices[0].finish_reason
-#             if state == 'stop':
-#                 save_chat_history(chatroom_id, user_question, complete_answer)
-#                 print("user_question:", user_question, "\ncomplete_answer", complete_answer)
-#                 break
-#             else:
-#                 complete_answer += chunk_message
-#             yield f"data: {chunk_message}\n\n"
-#
-#     response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
-#     response['X-Accel-Buffering'] = 'no'
-#     response['Cache-Control'] = 'no-cache'
-#     return response
-#
-#
-# @permission_classes([IsAuthenticated])
-# def leave_chatroom(request, chatroom_id):
-#     chat_history = cache.get(f"chatroom_{chatroom_id}_chat_history")
-#     if chat_history:
-#         chatroom = ChatRoom.objects.get(id=chatroom_id)
-#         if chatroom.leaved:
-#             return JsonResponse({"status": "cannot leave when already left"}, status=403)
-#         chatroom.chat_history = json.loads(chat_history)
-#         cache.delete(f"chatroom_{chatroom_id}_chat_history")
-#         cache.delete(f"chatroom_{chatroom_id}_ocr_texts")
-#         chatroom.leaved = True
-#         chatroom.save()
-#         return JsonResponse({"status": "success"})
-# def save_chat_history(chatroom_id, user_question, complete_answer):
-#     try:
-#         new_qa_pair = [{"role": 'user', "content": user_question}, {"role": 'assistant', "content": complete_answer}]
-#         cache_chatroom_data(chatroom_id, new_qa_pair)
-#     except ChatRoom.DoesNotExist:
-#         return JsonResponse({'error': 'ChatRoom not found'}, status=404)

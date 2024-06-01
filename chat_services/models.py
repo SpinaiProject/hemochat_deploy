@@ -1,9 +1,9 @@
-import uuid
-
 from django.db import models
-from django.db.models import Manager
+from django.core.exceptions import ValidationError
 from health_records.models import HealthRecordImage
 from hemochat_project import settings
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
 
 
 class AssistantConfig(models.Model):
@@ -21,6 +21,21 @@ class ChatRoom(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
 
+class TempChatroom(models.Model):
+    chatroom_id = models.CharField(max_length=255, unique=True)
+    chat_num = models.IntegerField(default=0)
+    image = models.ImageField(upload_to='temp_images/', blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        if self.chat_num > 5:
+            raise ValidationError('chat_num cannot exceed 5')
+        super().save(*args, **kwargs)
+
+
+@receiver(post_delete, sender=TempChatroom)
+def delete_associated_image(sender, instance, **kwargs):
+    if instance.image:
+        instance.image.delete(save=False)
 
 # 아래는 Assistant API Streaming이 지원되지 않을 때 사용할 모델들
 # class ChatRoom(models.Model):
