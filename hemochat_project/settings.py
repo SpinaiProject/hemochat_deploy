@@ -32,7 +32,7 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # deploy
-DEBUG = False
+DEBUG = True
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',')
 CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
@@ -85,6 +85,8 @@ INSTALLED_APPS = [
     "django_celery_results",
 
     'corsheaders',
+
+    'drf_yasg',
 ]
 
 MIDDLEWARE = [
@@ -184,8 +186,6 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",  # 인증된 사용자만 접근
-        "rest_framework.permissions.IsAdminUser",  # 관리자만 접근
-        "rest_framework.permissions.AllowAny",  # 누구나 접근
     ),
 }
 
@@ -312,3 +312,14 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 #     },
 # }
 #
+SWAGGER_SETTINGS = {
+   'USE_SESSION_AUTH': False,
+    'SECURITY_DEFINITIONS': {
+        'Bearer': {
+            'type': 'apiKey',
+            'name': 'Authorization',
+            'in': 'header',
+            'description': "JWT Authorization header using the Bearer scheme. Example: 'Authorization: Bearer {token}'",
+        }
+    }
+}
