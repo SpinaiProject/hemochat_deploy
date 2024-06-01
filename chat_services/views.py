@@ -22,8 +22,72 @@ from typing_extensions import override
 from openai import AssistantEventHandler
 
 OPEN_AI_API_KEY = os.environ.get('OPEN_AI_API_KEY')
-OPEN_AI_ASSISTANT_ID = os.environ.get('OPEN_AI_ASSISTANT_ID')
+assistant_id = os.environ.get('OPEN_AI_ASSISTANT_ID')
 OPEN_AI_CHAT_INSTRUCTION = os.environ.get('OPEN_AI_CHAT_INSTRUCTION')
+client = openai.OpenAI(api_key=OPEN_AI_API_KEY)
+
+ALLOWED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png']
+MAX_IMAGE_SIZE_MB = 5
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def create_temp_chatroom(request):
+    try:
+        empty_chatroom = client.beta.threads.create()
+        chatroom = TempChatroom.objects.create(
+            chatroom_id=empty_chatroom.id
+        )
+        return Response({
+            'chatroom_id': chatroom.chatroom_id,
+        }, status=status.HTTP_201_CREATED)
+    except Exception as e:
+        return Response({
+            'error': 'An unexpected error occurred: {}'.format(str(e))
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+def validate_image(image: UploadedFile):
+    ext = os.path.splitext(image.name)[1].lower()
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+        raise ValidationError('Unsupported file extension.')
+
+    if image.size > MAX_IMAGE_SIZE_MB * 1024 * 1024:
+        raise ValidationError('File size exceeds the allowed limit of 5MB.')
+
+    valid_mime_types = ['image/jpeg', 'image/png', 'image/gif']
+    if image.content_type not in valid_mime_types:
+        raise ValidationError('Unsupported file type.')
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def upload_temp_image(request, chatroom_id):
+    try:
+        chatroom = TempChatroom.objects.get(chatroom_id=chatroom_id)
+        if 'image' not in request.FILES:
+            return Response({'error': 'No image file provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        image = request.FILES['image']
+
+        try:
+            validate_image(image)
+        except ValidationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        chatroom.image = image
+        chatroom.save()
+
+        return Response({
+            'chatroom_id': chatroom.chatroom_id,
+            'image_url': chatroom.image.url if chatroom.image else None
+        }, status=status.HTTP_200_OK)
+
+    except TempChatroom.DoesNotExist:
+        return Response({'error': 'Chatroom not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': f'An error occurred while updating the image: {str(e)}'},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
