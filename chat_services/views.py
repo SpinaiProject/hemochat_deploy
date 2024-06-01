@@ -178,15 +178,21 @@ def enter_chatroom(request, chatroom_id):
 
         thread_messages = client.beta.threads.messages.list(chatroom.chatroom_id)
         total_messages = []
+        user_message_found = False
         for message in thread_messages:
-            for content_block in message.content:
-                created_at_datetime = datetime.datetime.fromtimestamp(message.created_at)
-                formatted_created_at = created_at_datetime.strftime('%Y-%m-%d %H:%M:%S')
-                total_messages.append({
-                    "created_at": formatted_created_at,
-                    "role": message.role,
-                    "text": content_block.text.value
-                })
+            if message.role == 'user':
+                user_message_found = True
+
+            if user_message_found:
+                for content_block in message.content:
+                    created_at_datetime = datetime.datetime.fromtimestamp(message.created_at)
+                    formatted_created_at = created_at_datetime.strftime('%Y-%m-%d %H:%M:%S')
+                    total_messages.append({
+                        "created_at": formatted_created_at,
+                        "role": message.role,
+                        "text": content_block.text.value
+                    })
+
         total_messages.reverse()
 
         response_data = {
