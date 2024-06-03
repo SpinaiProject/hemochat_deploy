@@ -2,7 +2,7 @@ aiohttp==3.9.3
 aiosignal==1.3.1
 amqp==5.2.0
 annotated-types==0.6.0
-anyio==4.2.0
+anyio==3.7.1
 asgiref==3.7.2
 attrs==23.2.0
 billiard==4.2.0
@@ -34,6 +34,7 @@ django-storages==1.14.2
 django-timezone-field==6.1.0
 djangorestframework==3.14.0
 djangorestframework-simplejwt==5.3.1
+drf-yasg==1.21.7
 frozenlist==1.4.1
 greenlet==3.0.3
 gunicorn==21.2.0
@@ -41,6 +42,7 @@ h11==0.14.0
 httpcore==1.0.2
 httpx==0.26.0
 idna==3.6
+inflection==0.5.1
 jmespath==1.0.1
 jsonpatch==1.33
 jsonpointer==2.4
@@ -51,9 +53,10 @@ langsmith==0.0.87
 marshmallow==3.20.2
 multidict==6.0.5
 mypy-extensions==1.0.0
+mysql-connector-python==8.4.0
 numpy==1.26.4
 oauthlib==3.2.2
-openai==1.24.0
+openai==1.2.0
 packaging==23.2
 pillow==10.2.0
 prompt-toolkit==3.0.43
@@ -85,6 +88,7 @@ tqdm==4.66.1
 typing-inspect==0.9.0
 typing_extensions==4.9.0
 tzdata==2023.4
+uritemplate==4.1.1
 urllib3==2.0.7
 vine==5.1.0
 wcwidth==0.2.13
