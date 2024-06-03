@@ -1,19 +1,15 @@
-import base64
-import datetime
-import json
-import os
-import time
-import uuid
-from urllib.parse import urlparse, unquote
+import base64,datetime,json,os,time,uuid,requests
 
 import requests
 from django.http import JsonResponse, StreamingHttpResponse
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated,AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
 from .models import *
 from .serializers import *
+from chat_services.models import TempChatroom
+
 from openai import OpenAI
 import openai
 
@@ -21,9 +17,11 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
 OPEN_AI_API_KEY = os.environ.get('OPEN_AI_API_KEY')
+OPEN_AI_CHAT_INSTRUCTION = os.environ.get('OPEN_AI_CHAT_INSTRUCTION')
 GENERAL_OCR_API_URL = os.environ.get('GENERAL_OCR_API_URL')
 GENERAL_OCR_SECRET_KEY = os.environ.get('GENERAL_OCR_SECRET_KEY')
 OPEN_AI_INSTRUCTION = os.environ.get('OPEN_AI_INSTRUCTION')
+client = OpenAI(api_key=OPEN_AI_API_KEY)
 
 
 # @swagger_auto_schema(
@@ -66,15 +64,10 @@ def upload_images(request):
         try:
             health_record_image = HealthRecordImage(image=image_file, user=user)
             health_record_image.save()
-            # cloudfront_domain_name = os.environ.get('IMAGE_CUSTOM_DOMAIN')
-            # s3_object_key = health_record_image.image.name
-            # cloudfront_url = f'{cloudfront_domain_name}/{s3_object_key}'
-            # urls.append(cloudfront_url)
         except Exception as e:
             return Response({'error': str(e)}, status=500)
 
     return Response({'message': '이미지가 정상 업로드 되었습니다'})
-
 
 
 @api_view(['GET'])
@@ -140,19 +133,6 @@ def delete_health_records(request):
     records_to_delete.delete()
     return Response({'message': '성공적으로 삭제되었습니다'})
 
-
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])  # 헤더에 Authorization': Bearer userToken 형태로 jwt토큰 담아서 요청해야 함
-def user_health_records_count(request):
-    user = request.user
-    total_records_count = user.healthrecordimage_set.count()
-    analyzed_records_count = user.healthrecordimage_set.exclude(ocr_text='').count()
-
-    return Response({
-        'total_records_count': total_records_count,
-        'analyzed': analyzed_records_count,
-        'unanalyzed': total_records_count - analyzed_records_count,
-    })
 
 
 def format_ocr_data(ocr_data, row_threshold=10, column_threshold=50):
@@ -275,8 +255,6 @@ chatroom_id_schema = openapi.Schema(
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def general_ocr_analysis(request):
-    client = OpenAI(api_key=OPEN_AI_API_KEY)
-
     record_id = request.data.get('record_id', None)
     chatroom_id = request.data.get('chatroom_id', None)
 
@@ -333,57 +311,3 @@ def general_ocr_analysis(request):
     response['X-Accel-Buffering'] = 'no'
     response['Cache-Control'] = 'no-cache'
     return response
-
-# @api_view(['POST'])
-# @permission_classes([IsAuthenticated])  # 헤더에 Authorization': Bearer userToken 형태로 jwt토큰 담아서 요청해야 함
-# def template_ocr_analysis(request):
-#     api_url = os.environ.get('TEMPLATE_OCR_API_URL')
-#     secret_key = os.environ.get('TEMPLATE_OCR_SECRET_KEY')
-#
-#     headers = {
-#         'X-OCR-SECRET': secret_key,
-#     }
-#
-#     record_ids = request.data.get('record_ids', None)
-#     if not record_ids:
-#         return Response({'error': '검사지를 선택해주세요'}, status=400)
-#
-#     records_to_analyze = HealthRecordImage.objects.filter(user=request.user, id__in=record_ids)
-#     if not records_to_analyze:
-#         return Response({'error': '존재하지 않는 이미지입니다'}, status=404)
-#
-#     for record in records_to_analyze:
-#         image_name = record.image.name
-#         file_extension = os.path.splitext(image_name)[1][1:]
-#         with open(record.image.path, 'rb') as img_file:
-#             files = [('file', img_file)]
-#             request_json = {
-#                 'images': [
-#                     {
-#                         'format': file_extension,
-#                         'name': image_name,
-#                         'templateIds': []
-#                     }
-#                 ],
-#                 'requestId': str(uuid.uuid4()),
-#                 'version': 'V2',
-#                 'timestamp': int(round(time.time() * 1000))
-#             }
-#             payload = {'message': json.dumps(request_json).encode('UTF-8')}
-#             response = requests.request("POST", api_url, headers=headers, data=payload, files=files)
-#             if response.status_code == 200:
-#                 json_response = response.json()
-#                 if not json_response['images'][0]['inferResult'] == 'FAILURE':
-#                     fields = json_response['images'][0]['fields']
-#                     ocr_data = {field['name']: field['inferText'] for field in fields}
-#                     ocr_text_json = json.dumps(ocr_data, ensure_ascii=False)
-#                     record.ocr_text = ocr_text_json
-#                     record.save()
-#                 else:
-#                     errors, status = perform_general_ocr_analysis(record)
-#                     if errors:
-#                         return Response({'errors': errors}, status=status)
-#             else:
-#                 return Response({'error': '검사지 분석 실패'}, status=response.status_code)
-#
-#     return Response({'message': '검사지 분석이 완료되었습니다'})
