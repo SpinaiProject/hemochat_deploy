@@ -57,7 +57,6 @@ class User(AbstractUser):
         ('O', 'Other'),
     )
     email = models.EmailField(unique=True, blank=False, null=False)
-    nickname = models.CharField(max_length=100, null=True, blank=True)
     username = models.CharField(max_length=150, unique=False, blank=True)
     signup_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
     random_directory_name = models.CharField(max_length=20, unique=True, blank=True)
@@ -68,6 +67,8 @@ class User(AbstractUser):
     phone_number = models.CharField(max_length=20, null=True, blank=True)
     phone_verified = models.BooleanField(default=False)
     verification_code = models.CharField(max_length=6, blank=True, null=True)
+    profile_image = models.ImageField(upload_to='profile_images/', null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     objects = UserManager()
     USERNAME_FIELD = 'email'
