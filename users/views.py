@@ -11,7 +11,7 @@ from django.http import JsonResponse
 from django.shortcuts import redirect, get_object_or_404
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from rest_framework.decorators import permission_classes
+from rest_framework.decorators import api_view,permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework import status, viewsets
 from rest_framework.views import APIView
@@ -20,6 +20,9 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework.response import Response
 
 from .serializers import *
+
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
 
 BASE_URL = settings.BASE_URL
 KAKAO_FRONT_REDIRECT = os.environ.get('FRONT_KAKAO_REDIRECT')
@@ -38,7 +41,40 @@ class UserViewSet(viewsets.ModelViewSet):
 #     return redirect(
 #         f"https://kauth.kakao.com/oauth/authorize?client_id={client_id}&redirect_uri={KAKAO_FRONT_REDIRECT}&response_type=code&scope=account_email")
 
-
+@swagger_auto_schema(
+    method='post',
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'code': openapi.Schema(type=openapi.TYPE_STRING, description='카카오로부터 받은 인증 코드'),
+        },
+        required=['code'],
+    ),
+    responses={
+        200: openapi.Response(
+            description='인증에 성공하였습니다.',
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'created': openapi.Schema(type=openapi.TYPE_BOOLEAN, description='새 사용자가 생성되었는지 여부'),
+                    'access': openapi.Schema(type=openapi.TYPE_STRING, description='JWT 액세스 토큰'),
+                    'refresh': openapi.Schema(type=openapi.TYPE_STRING, description='JWT 리프레시 토큰'),
+                }
+            )
+        ),
+        400: openapi.Response(
+            description='잘못된 요청',
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'error': openapi.Schema(type=openapi.TYPE_STRING, description='에러 메시지'),
+                }
+            )
+        ),
+    }
+)
+@api_view(['POST'])
+@permission_classes([AllowAny])
 def kakao_login(request):
     client_id = os.environ.get('KAKAO_REST_API_KEY')
     try:
@@ -95,12 +131,49 @@ def kakao_login(request):
         "refresh": refresh
     })
 
-# class KakaoLogin(SocialLoginView):
-#     adapter_class = kakao_view.KakaoOAuth2Adapter
-#     callback_url = KAKAO_FRONT_REDIRECT
-#     client_class = OAuth2Client
 
-
+@swagger_auto_schema(
+    method='post',
+    manual_parameters=[
+        openapi.Parameter(
+            'access',
+            openapi.IN_QUERY,
+            description='액세스 토큰',
+            type=openapi.TYPE_STRING,
+            required=True
+        ),
+    ],
+    responses={
+        200: openapi.Response(
+            description='성공적으로 로그아웃 했습니다',
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'message': openapi.Schema(type=openapi.TYPE_STRING, description='성공 메시지'),
+                }
+            )
+        ),
+        400: openapi.Response(
+            description='잘못된 요청',
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'error': openapi.Schema(type=openapi.TYPE_STRING, description='에러 메시지'),
+                }
+            )
+        ),
+        401: openapi.Response(
+            description='인증 실패',
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'error': openapi.Schema(type=openapi.TYPE_STRING, description='에러 메시지'),
+                }
+            )
+        )
+    }
+)
+@api_view(['POST'])
 @permission_classes([IsAuthenticated])  # 헤더에 Authorization': Bearer userToken 형태로 jwt토큰 담아서 요청해야 함
 def kakao_logout(request):
     access = request.GET.get('access')  # 액세스 토큰을 쿼리 파라미터로 넘겨 받아 로그아웃 하는 방식
@@ -123,7 +196,39 @@ def test(request):
     return redirect(
         f"https://accounts.google.com/o/oauth2/v2/auth?client_id={client_id}&redirect_uri={GOOGLE_CALLBACK_URI}&response_type=code&scope={scope}")
 
-
+@swagger_auto_schema(
+    method='post',
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'code': openapi.Schema(type=openapi.TYPE_STRING, description='Google로부터 받은 인증 코드'),
+        },
+        required=['code'],
+    ),
+    responses={
+        200: openapi.Response(
+            description='성공적으로 인증되었습니다.',
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'created': openapi.Schema(type=openapi.TYPE_BOOLEAN, description='새 사용자가 생성되었는지 여부'),
+                    'access': openapi.Schema(type=openapi.TYPE_STRING, description='JWT 액세스 토큰'),
+                    'refresh': openapi.Schema(type=openapi.TYPE_STRING, description='JWT 리프레시 토큰'),
+                }
+            )
+        ),
+        400: openapi.Response(
+            description='잘못된 요청',
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'error': openapi.Schema(type=openapi.TYPE_STRING, description='에러 메시지'),
+                }
+            )
+        ),
+    }
+)
+@api_view(['POST'])
 def google_login(request):
     client_id = os.environ.get("SOCIAL_AUTH_GOOGLE_CLIENT_ID")
     client_secret = os.environ.get("SOCIAL_AUTH_GOOGLE_SECRET")
@@ -230,6 +335,11 @@ class EmailSignupView(APIView):
 class MyPageView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @swagger_auto_schema(
+        responses={200: DetailSerializer()},
+        operation_description="사용자 정보를 조회합니다.",
+        security=[{'Bearer': []}]
+    )
     def get(self, request, *args, **kwargs):
         user = request.user
         serializer = DetailSerializer(user)
@@ -240,6 +350,15 @@ class MyPageView(APIView):
 class UserUpdateView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @swagger_auto_schema(
+        request_body=UserUpdateSerializer,
+        responses={
+            200: UserUpdateSerializer(),
+            400: openapi.Response(description='잘못된 요청')
+        },
+        operation_description="사용자 정보를 업데이트합니다.",
+        security=[{'Bearer': []}]
+    )
     def patch(self, request, *args, **kwargs):
         user = request.user
         serializer = UserUpdateSerializer(user, data=request.data, partial=True)
@@ -248,13 +367,39 @@ class UserUpdateView(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    @swagger_auto_schema(
+        responses={
+            204: openapi.Response(description='삭제 완료'),
+            404: openapi.Response(description='사용자를 찾을 수 없습니다'),
+            500: openapi.Response(description='서버 오류')
+        },
+        operation_description="사용자 계정을 삭제합니다.",
+        security=[{'Bearer': []}]
+    )
     def delete(self, request, format=None):
-        request.user.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
+        user = get_object_or_404(User, id=request.user.id)
+        try:
+            user.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # 전화번호 인증 관련 뷰함수(인증번호 발송, 검증)
 class SendVerificationCodeAPIView(APIView):
+    @swagger_auto_schema(
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'phone_number': openapi.Schema(type=openapi.TYPE_STRING, description='전화번호')
+            },
+            required=['phone_number']
+        ),
+        responses={
+            200: openapi.Response(description='인증 코드가 발송되었습니다.'),
+            400: openapi.Response(description='잘못된 요청')
+        },
+        operation_description="전화번호로 인증 코드를 발송합니다."
+    )
     def post(self, request, *args, **kwargs):
         phone_number = request.data.get('phone_number')
         if phone_number is None:
@@ -266,6 +411,21 @@ class SendVerificationCodeAPIView(APIView):
 
 
 class VerifyPhoneNumberAPIView(APIView):
+    @swagger_auto_schema(
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'phone_number': openapi.Schema(type=openapi.TYPE_STRING, description='전화번호'),
+                'code': openapi.Schema(type=openapi.TYPE_STRING, description='인증 코드')
+            },
+            required=['phone_number', 'code']
+        ),
+        responses={
+            200: openapi.Response(description='전화번호가 인증되었습니다.'),
+            400: openapi.Response(description='잘못된 요청')
+        },
+        operation_description="전화번호와 인증 코드를 사용하여 인증합니다."
+    )
     def post(self, request, *args, **kwargs):
         phone_number = request.data.get('phone_number')
         code = request.data.get('code')
@@ -283,6 +443,20 @@ class VerifyPhoneNumberAPIView(APIView):
 class SendEmailVerificationCodeAPIView(APIView):
     permission_classes = [AllowAny]
 
+    @swagger_auto_schema(
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'phone_number': openapi.Schema(type=openapi.TYPE_STRING, description='전화번호')
+            },
+            required=['phone_number']
+        ),
+        responses={
+            200: openapi.Response(description='인증 코드가 발송되었습니다.'),
+            400: openapi.Response(description='잘못된 요청')
+        },
+        operation_description="전화번호로 이메일 인증 코드를 발송합니다."
+    )
     def post(self, request, *args, **kwargs):
         phone_number = request.data.get('phone_number')
         if phone_number is None:
@@ -296,6 +470,26 @@ class SendEmailVerificationCodeAPIView(APIView):
 class VerifyPhoneNumberAndReturnEmailAPIView(APIView):
     permission_classes = [AllowAny]
 
+    @swagger_auto_schema(
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'phone_number': openapi.Schema(type=openapi.TYPE_STRING, description='전화번호'),
+                'code': openapi.Schema(type=openapi.TYPE_STRING, description='인증 코드')
+            },
+            required=['phone_number', 'code']
+        ),
+        responses={
+            200: openapi.Response(description='이메일이 반환되었습니다.', schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'email': openapi.Schema(type=openapi.TYPE_STRING, description='사용자의 이메일')
+                }
+            )),
+            400: openapi.Response(description='잘못된 요청')
+        },
+        operation_description="전화번호와 인증 코드를 사용하여 이메일을 반환합니다."
+    )
     def post(self, request, *args, **kwargs):
         phone_number = request.data.get('phone_number')
         verification_code = request.data.get('code')
@@ -314,6 +508,21 @@ class VerifyPhoneNumberAndReturnEmailAPIView(APIView):
 class RequestPhoneNumberForPassword(APIView):
     permission_classes = [AllowAny]
 
+    @swagger_auto_schema(
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'email': openapi.Schema(type=openapi.TYPE_STRING, description='이메일 주소')
+            },
+            required=['email']
+        ),
+        responses={
+            200: openapi.Response(description='OK'),
+            400: openapi.Response(description='잘못된 요청'),
+            404: openapi.Response(description='사용자를 찾을 수 없습니다')
+        },
+        operation_description="비밀번호 재설정을 위한 전화번호 요청"
+    )
     def post(self, request, *args, **kwargs):
         email = request.data.get('email')
 
@@ -330,6 +539,22 @@ class RequestPhoneNumberForPassword(APIView):
 class VerifyPhoneNumberForPassword(APIView):
     permission_classes = [AllowAny]
 
+    @swagger_auto_schema(
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'email': openapi.Schema(type=openapi.TYPE_STRING, description='이메일 주소'),
+                'phone_number': openapi.Schema(type=openapi.TYPE_STRING, description='전화번호')
+            },
+            required=['email', 'phone_number']
+        ),
+        responses={
+            200: openapi.Response(description='인증 코드가 발송되었습니다. 전화를 확인해 주세요.'),
+            400: openapi.Response(description='잘못된 요청'),
+            404: openapi.Response(description='사용자를 찾을 수 없습니다')
+        },
+        operation_description="비밀번호 재설정을 위한 전화번호 인증"
+    )
     def post(self, request, *args, **kwargs):
         email = request.data.get('email')
         input_phone_number = request.data.get('phone_number')
@@ -348,6 +573,23 @@ class VerifyPhoneNumberForPassword(APIView):
 class PasswordResetView(APIView):
     permission_classes = [AllowAny]
 
+    @swagger_auto_schema(
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'email': openapi.Schema(type=openapi.TYPE_STRING, description='이메일 주소'),
+                'verification_code': openapi.Schema(type=openapi.TYPE_STRING, description='인증 코드'),
+                'new_password': openapi.Schema(type=openapi.TYPE_STRING, description='새 비밀번호')
+            },
+            required=['email', 'verification_code', 'new_password']
+        ),
+        responses={
+            200: openapi.Response(description='비밀번호가 성공적으로 변경되었습니다.'),
+            400: openapi.Response(description='잘못된 요청'),
+            404: openapi.Response(description='사용자를 찾을 수 없습니다')
+        },
+        operation_description="비밀번호 재설정"
+    )
     def post(self, request, *args, **kwargs):
         email = request.data.get('email')
         verification_code = request.data.get('verification_code')

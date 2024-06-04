@@ -2,9 +2,10 @@ import base64,datetime,json,os,time,uuid,requests
 
 import requests
 from django.http import JsonResponse, StreamingHttpResponse
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes,parser_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
 
 from .models import *
 from .serializers import *
@@ -24,27 +25,28 @@ OPEN_AI_INSTRUCTION = os.environ.get('OPEN_AI_INSTRUCTION')
 client = OpenAI(api_key=OPEN_AI_API_KEY)
 
 
-# @swagger_auto_schema(
-#     method='post',
-#     manual_parameters=[
-#         openapi.Parameter(
-#             'images',
-#             openapi.IN_FORM,
-#             description="업로드할 이미지/폴더",
-#             type=openapi.TYPE_FILE,
-#             required=True,
-#             multiple=True
-#         ),
-#     ],
-#     responses={
-#         200: openapi.Response(description="이미지가 정상 업로드 되었습니다"),
-#         400: openapi.Response(description="Bad request"),
-#         401: openapi.Response(description="Unauthorized"),
-#         500: openapi.Response(description="Internal server error")
-#     }
-# )
+@swagger_auto_schema(
+    method='post',
+    manual_parameters=[
+        openapi.Parameter(
+            'images',
+            openapi.IN_FORM,
+            description="form-data 형식의 이미지/폴더",
+            type=openapi.TYPE_FILE,
+            required=True,
+            multiple=True
+        ),
+    ],
+    responses={
+        200: openapi.Response(description="이미지가 정상 업로드 되었습니다"),
+        400: openapi.Response(description="Bad request"),
+        401: openapi.Response(description="Unauthorized"),
+        500: openapi.Response(description="Internal server error")
+    }
+)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])  # 헤더에 Authorization': Bearer userToken 형태로 jwt토큰 담아서 요청해야 함
+@parser_classes([MultiPartParser, FormParser])
 def upload_images(request):
     user = request.user
     if not user.is_authenticated:
@@ -70,6 +72,18 @@ def upload_images(request):
     return Response({'message': '이미지가 정상 업로드 되었습니다'})
 
 
+@swagger_auto_schema(
+    method='get',
+    responses={
+        200: openapi.Response(
+            description="사용자의 건강 기록 목록",
+            schema=HealthRecordImageSerializer(many=True)
+        ),
+        401: openapi.Response(description="Unauthorized")
+    },
+    operation_description="사용자의 건강 기록을 조회합니다.",
+    security=[{'Bearer': []}]
+)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])  # 헤더에 Authorization': Bearer userToken 형태로 jwt토큰 담아서 요청해야 함
 def user_health_records(request):

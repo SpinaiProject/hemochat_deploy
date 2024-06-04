@@ -4,7 +4,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 urlpatterns = [
     path('kakao/login/', kakao_login, name='kakao_login'),
-    path('kakao/logout/', kakao_logout, name='kakao_logout'),
+    #path('kakao/logout/', kakao_logout, name='kakao_logout'),
     # path('kakao/callback/', kakao_callback, name='kakao_callback'),
     # path('kakao/login/finish/', KakaoLogin.as_view(), name='kakao_login_todoclass'),
 
@@ -18,7 +18,7 @@ urlpatterns = [
 
     path('my-page/', MyPageView.as_view(), name='my-page'),
 
-    # path('user/update/', UserUpdateView.as_view(), name='user_update'),
+    path('user/update/', UserUpdateView.as_view(), name='user_update'),
     path('user/delete/', UserUpdateView.as_view(), name='user_delete'),
     path('user/refresh/', TokenRefreshView.as_view(), name='refresh'),
 

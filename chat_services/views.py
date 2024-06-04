@@ -9,8 +9,9 @@ from django.core.files.uploadedfile import UploadedFile
 from django.shortcuts import get_object_or_404
 
 from rest_framework import status
-from rest_framework.decorators import permission_classes, api_view
+from rest_framework.decorators import permission_classes, api_view,parser_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.parsers import MultiPartParser, FormParser
 
 from rest_framework.response import Response
 
@@ -21,6 +22,9 @@ import openai
 from typing_extensions import override
 from openai import AssistantEventHandler
 
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+
 OPEN_AI_API_KEY = os.environ.get('OPEN_AI_API_KEY')
 assistant_id = os.environ.get('OPEN_AI_ASSISTANT_ID')
 OPEN_AI_CHAT_INSTRUCTION = os.environ.get('OPEN_AI_CHAT_INSTRUCTION')
@@ -30,6 +34,22 @@ ALLOWED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png']
 MAX_IMAGE_SIZE_MB = 5
 
 
+@swagger_auto_schema(
+    method='post',
+    responses={
+        201: openapi.Response(
+            description="채팅방이 성공적으로 생성되었습니다.",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'chatroom_id': openapi.Schema(type=openapi.TYPE_STRING, description='생성된 채팅방 ID')
+                }
+            )
+        ),
+        500: openapi.Response(description="Internal server error")
+    },
+    operation_description="체험형 채팅방을 생성합니다."
+)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def create_temp_chatroom(request):
@@ -60,8 +80,44 @@ def validate_image(image: UploadedFile):
         raise ValidationError('Unsupported file type.')
 
 
+@swagger_auto_schema(
+    method='post',
+    manual_parameters=[
+        openapi.Parameter(
+            'chatroom_id',
+            openapi.IN_PATH,
+            description="채팅방 ID",
+            type=openapi.TYPE_STRING,
+            required=True
+        ),
+        openapi.Parameter(
+            'image',
+            openapi.IN_FORM,
+            description="업로드할 이미지 파일",
+            type=openapi.TYPE_FILE,
+            required=True
+        ),
+    ],
+    responses={
+        200: openapi.Response(
+            description="이미지가 정상적으로 업로드되었습니다.",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'chatroom_id': openapi.Schema(type=openapi.TYPE_STRING, description='채팅방 ID'),
+                    'image_url': openapi.Schema(type=openapi.TYPE_STRING, description='이미지 URL')
+                }
+            )
+        ),
+        400: openapi.Response(description="Bad request"),
+        404: openapi.Response(description="Chatroom not found"),
+        500: openapi.Response(description="Internal server error")
+    },
+    operation_description="임시 채팅방에 이미지를 업로드합니다."
+)
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@parser_classes([MultiPartParser, FormParser])
 def upload_temp_image(request, chatroom_id):
     try:
         chatroom = TempChatroom.objects.get(chatroom_id=chatroom_id)
@@ -90,6 +146,36 @@ def upload_temp_image(request, chatroom_id):
                         status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@swagger_auto_schema(
+    method='post',
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'record_ids': openapi.Schema(
+                type=openapi.TYPE_ARRAY,
+                items=openapi.Items(type=openapi.TYPE_INTEGER),
+                description="선택한 건강 기록 이미지의 ID 목록"
+            ),
+            'title': openapi.Schema(type=openapi.TYPE_STRING, description="채팅방 제목"),
+        },
+        required=['record_ids', 'title'],
+    ),
+    responses={
+        200: openapi.Response(
+            description="채팅방이 생성되었습니다.",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'message': openapi.Schema(type=openapi.TYPE_STRING, description='성공 메시지'),
+                    'thread_id': openapi.Schema(type=openapi.TYPE_STRING, description='생성된 채팅방 ID')
+                }
+            )
+        ),
+        400: openapi.Response(description="Bad request"),
+        500: openapi.Response(description="Internal server error")
+    },
+    operation_description="채팅방을 생성합니다."
+)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def create_chatroom(request):
@@ -144,6 +230,17 @@ def update_chatroom_cache_on_create(user_id, chatroom, records):
         cache.set(cache_key, json.dumps([chatroom_data]), timeout=900)
 
 
+@swagger_auto_schema(
+    method='post',
+    responses={
+        200: openapi.Response(
+            description="사용자의 채팅방 목록",
+            schema=ChatRoomListSerializer(many=True)
+        ),
+        400: openapi.Response(description="Bad request")
+    },
+    operation_description="사용자의 채팅방 목록을 반환합니다."
+)
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def list_chatroom(request):
@@ -163,6 +260,77 @@ def list_chatroom(request):
         return Response({'error': str(e)}, status=400)
 
 
+@swagger_auto_schema(
+    method='get',
+    manual_parameters=[
+        openapi.Parameter(
+            'chatroom_id',
+            openapi.IN_PATH,
+            description="상세 정보를 조회할 채팅방의 ID",
+            type=openapi.TYPE_INTEGER
+        )
+    ],
+    responses={
+        200: openapi.Response(
+            description="채팅방 세부 정보와 최근 메시지가 성공적으로 조회되었습니다.",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'chatroom': openapi.Schema(
+                        type=openapi.TYPE_OBJECT,
+                        properties={
+                            'id': openapi.Schema(type=openapi.TYPE_INTEGER),
+                            'title': openapi.Schema(type=openapi.TYPE_STRING),
+                            'created_at': openapi.Schema(type=openapi.TYPE_STRING, format='date-time'),
+                            'updated_at': openapi.Schema(type=openapi.TYPE_STRING, format='date-time'),
+                            'health_records': openapi.Schema(
+                                type=openapi.TYPE_ARRAY,
+                                items=openapi.Schema(
+                                    type=openapi.TYPE_OBJECT,
+                                    properties={
+                                        'user': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                        'image': openapi.Schema(type=openapi.TYPE_STRING, format='binary'),
+                                        'ocr_text': openapi.Schema(type=openapi.TYPE_STRING),
+                                        'created_at': openapi.Schema(type=openapi.TYPE_STRING, format='date-time')
+                                    }
+                                )
+                            )
+                        }
+                    ),
+                    'messages': openapi.Schema(
+                        type=openapi.TYPE_ARRAY,
+                        items=openapi.Schema(
+                            type=openapi.TYPE_OBJECT,
+                            properties={
+                                'created_at': openapi.Schema(type=openapi.TYPE_STRING, format='date-time'),
+                                'role': openapi.Schema(type=openapi.TYPE_STRING),
+                                'text': openapi.Schema(type=openapi.TYPE_STRING)
+                            }
+                        )
+                    )
+                }
+            )
+        ),
+        404: openapi.Response(
+            description="존재하지 않는 채팅방입니다.",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'error': openapi.Schema(type=openapi.TYPE_STRING, example='존재하지 않는 채팅방입니다')
+                }
+            )
+        ),
+        500: openapi.Response(
+            description="예기치 않은 오류가 발생했습니다.",
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'error': openapi.Schema(type=openapi.TYPE_STRING, example='Internal server error message')
+                }
+            )
+        )
+    }
+)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def enter_chatroom(request, chatroom_id):
@@ -207,6 +375,25 @@ def enter_chatroom(request, chatroom_id):
         return Response({'error': str(e)}, status=500)
 
 
+@swagger_auto_schema(
+    method='delete',
+    manual_parameters=[
+        openapi.Parameter(
+            'chatroom_id',
+            openapi.IN_PATH,
+            description="채팅방 ID",
+            type=openapi.TYPE_STRING,
+            required=True
+        )
+    ],
+    responses={
+        204: openapi.Response(description="채팅방이 삭제되었습니다"),
+        400: openapi.Response(description="Bad request"),
+        404: openapi.Response(description="존재하지 않는 채팅방입니다"),
+        500: openapi.Response(description="Internal server error")
+    },
+    operation_description="채팅방을 삭제합니다."
+)
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
 def delete_chatroom(request, chatroom_id):
@@ -273,6 +460,37 @@ def update_chatroom_cache(chatroom_id, content, accumulated_responses):
         data['messages'].extend([new_user_message, new_system_message])
         cache.set(cache_key, json.dumps(data), timeout=900)
 
+@swagger_auto_schema(
+    method='post',
+    manual_parameters=[
+        openapi.Parameter(
+            'chatroom_id',
+            openapi.IN_PATH,
+            description="채팅방 ID",
+            type=openapi.TYPE_STRING,
+            required=True
+        )
+    ],
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            'content': openapi.Schema(type=openapi.TYPE_STRING, description="메시지 내용"),
+        },
+        required=['content']
+    ),
+    responses={
+        200: openapi.Response(
+            description="메시지가 성공적으로 생성되었습니다.",
+            schema=openapi.Schema(
+                type=openapi.TYPE_STRING,
+                description="스트리밍된 메시지 응답"
+            )
+        ),
+        400: openapi.Response(description="Bad request"),
+        500: openapi.Response(description="Internal server error")
+    },
+    operation_description="채팅방에 메시지를 생성하고 스트리밍된 응답을 반환합니다."
+)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def create_message(request, chatroom_id):
