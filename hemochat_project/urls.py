@@ -1,3 +1,5 @@
+import os
+
 from django.contrib import admin
 from django.urls import path, include, re_path
 from django.conf import settings
@@ -18,6 +20,7 @@ schema_view = get_schema_view(
     public=True,
     permission_classes=(permissions.AllowAny,),
     authentication_classes=[],
+    url=os.environ.get('BASE_URL')
 )
 
 urlpatterns = [
