@@ -34,13 +34,13 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 # deploy
 DEBUG = True
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',')
-CORS_ORIGIN_ALLOW_ALL = True
+# CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_CREDENTIALS = True
 
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:3000",
-#     "https://yourdomain.com",
-# ]
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    os.environ.get('BASE_URL'),
+]
 # CORS_ALLOW_CREDENTIALS = True
 # ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',')
 
@@ -319,5 +319,7 @@ SWAGGER_SETTINGS = {
             'name': 'Authorization',
             'in': 'header'
         }
-    }
+    },
+    'USE_SESSION_AUTH': False,
+    'DEFAULT_API_URL': os.environ.get('BASE_URL'),
 }
