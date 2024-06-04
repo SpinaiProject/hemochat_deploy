@@ -292,6 +292,30 @@ class GoogleLogin(SocialLoginView):
 class EmailSignupView(APIView):
     permission_classes = [AllowAny]
 
+    @swagger_auto_schema(
+        request_body=CustomSignupSerializer,
+        responses={
+            201: openapi.Response(
+                description="성공적으로 회원가입 되었습니다",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "detail": openapi.Schema(type=openapi.TYPE_STRING, description="성공 메시지")
+                    }
+                )
+            ),
+            400: openapi.Response(
+                description="Bad request",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "detail": openapi.Schema(type=openapi.TYPE_STRING, description="에러 메시지")
+                    }
+                )
+            )
+        },
+        operation_description="이메일을 사용하여 회원가입을 합니다."
+    )
     def post(self, request, *args, **kwargs):
         serializer = CustomSignupSerializer(data=request.data)
         if serializer.is_valid():
@@ -349,11 +373,28 @@ class MyPageView(APIView):
 # 개인정보 업데이트 및 삭제
 class UserUpdateView(APIView):
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
 
     @swagger_auto_schema(
-        request_body=UserUpdateSerializer,
+        manual_parameters=[
+            openapi.Parameter(
+                'profile_image',
+                openapi.IN_FORM,
+                description="프로필 이미지 파일",
+                type=openapi.TYPE_FILE,
+                required=True,
+            )
+        ],
         responses={
-            200: UserUpdateSerializer(),
+            200: openapi.Response(
+                description="성공적으로 프로필 사진이 업데이트되었습니다.",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'message': openapi.Schema(type=openapi.TYPE_STRING),
+                    }
+                )
+            ),
             400: openapi.Response(description='잘못된 요청')
         },
         operation_description="사용자 정보를 업데이트합니다.",
