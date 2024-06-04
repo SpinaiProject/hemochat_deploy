@@ -39,7 +39,7 @@ CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    os.environ.get('BASE_URL'),
+    os.environ.get('BASE_URL').rstrip('/'),
 ]
 # CORS_ALLOW_CREDENTIALS = True
 # ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',')
@@ -321,5 +321,5 @@ SWAGGER_SETTINGS = {
         }
     },
     'USE_SESSION_AUTH': False,
-    'DEFAULT_API_URL': os.environ.get('BASE_URL'),
+    'DEFAULT_API_URL': os.environ.get('BASE_URL').rstrip('/'),
 }

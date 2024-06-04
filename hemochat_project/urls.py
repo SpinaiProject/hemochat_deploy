@@ -20,7 +20,7 @@ schema_view = get_schema_view(
     public=True,
     permission_classes=(permissions.AllowAny,),
     authentication_classes=[],
-    url=os.environ.get('BASE_URL')
+    url=os.environ.get('BASE_URL').rstrip('/')
 )
 
 urlpatterns = [
