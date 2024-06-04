@@ -11,8 +11,9 @@ from django.http import JsonResponse
 from django.shortcuts import redirect, get_object_or_404
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from rest_framework.decorators import api_view,permission_classes
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -356,7 +357,7 @@ class UserUpdateView(APIView):
             200: UserUpdateSerializer(),
             400: openapi.Response(description='잘못된 요청')
         },
-        operation_description="사용자 정보를 업데이트합니다.",
+        operation_description="프로필 사진을 업데이트합니다.",
         security=[{'Bearer': []}]
     )
     def patch(self, request, *args, **kwargs):
@@ -364,8 +365,11 @@ class UserUpdateView(APIView):
         serializer = UserUpdateSerializer(user, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response({'message': '성공적으로 프로필 사진이 업데이트되었습니다.'}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class UserDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
         responses={
