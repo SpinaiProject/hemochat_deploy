@@ -14,24 +14,23 @@ urlpatterns = [
 
     path('email/signup/', EmailSignupView.as_view(), name='email_signup'),
     path('email/login/', TokenObtainPairView.as_view(), name='email_login'),
+    path('email/send-verification-code/', SendVerificationCodeAPIView.as_view(), name='send_verification_code'),
+    path('email/verify-phone-number/', VerifyPhoneNumberAPIView.as_view(), name='verify_phone_number'),
     # path('email/already_exist/', EmailAlreadyExistAPIView.as_view(), name='email_already_exist'),
 
     path('my-page/', MyPageView.as_view(), name='my-page'),
-
     path('user/update/', UserUpdateView.as_view(), name='user_update'),
-    path('user/delete/', UserUpdateView.as_view(), name='user_delete'),
+    path('user/delete/', UserDeleteView.as_view(), name='user_delete'),
     path('user/refresh/', TokenRefreshView.as_view(), name='refresh'),
 
-    path('send-verification-code/', SendVerificationCodeAPIView.as_view(), name='send_verification_code'),
-    path('verify-phone-number/', VerifyPhoneNumberAPIView.as_view(), name='verify_phone_number'),
 
-    path('find-email/verify/', SendEmailVerificationCodeAPIView.as_view(),
-         name='find-email-verify'),
+    path('find-email/send-verification-code/', SendEmailVerificationCodeAPIView.as_view(),
+         name='find-email-verification-code'),
     path('find-email/return/', VerifyPhoneNumberAndReturnEmailAPIView.as_view(),
          name='find-email-return'),
 
-    path('find-password/request/', RequestPhoneNumberForPassword.as_view(), name='find-password-request'),
-    path('find-password/verify/', VerifyPhoneNumberForPassword.as_view(), name='find-password-verify'),
+    # path('find-password/request/', RequestPhoneNumberForPassword.as_view(), name='find-password-request'),
+    path('find-password/send-verification-code/', VerifyPhoneNumberForPassword.as_view(), name='find-password-verify'),
     path('find-password/reset/', PasswordResetView.as_view(), name='find-password-reset'),
 
 ]
