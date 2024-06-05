@@ -381,7 +381,7 @@ class MyPageView(APIView):
 
     @swagger_auto_schema(
         responses={200: DetailSerializer()},
-        operation_description="사용자 정보를 조회합니다.",
+        operation_description="사용자 정보를 조회합니다. 로그인 전제이므로 jwt 토큰을 'Authentication Bearer (토큰)'형태로 헤더에 담아야합니다.",
         security=[{'Bearer': []}]
     )
     def get(self, request, *args, **kwargs):
@@ -417,7 +417,7 @@ class UserUpdateView(APIView):
             ),
             400: openapi.Response(description='잘못된 요청')
         },
-        operation_description="프로필 사진을 업데이트합니다.",
+        operation_description="프로필 사진을 업데이트합니다. 로그인 전제이므로 jwt 토큰을 'Authentication Bearer (토큰)'형태로 헤더에 담아야합니다.",
         security=[{'Bearer': []}]
     )
     def patch(self, request, *args, **kwargs):
@@ -437,7 +437,7 @@ class UserDeleteView(APIView):
             404: openapi.Response(description='사용자를 찾을 수 없습니다'),
             500: openapi.Response(description='서버 오류')
         },
-        operation_description="사용자 계정을 삭제합니다.",
+        operation_description="사용자 계정을 삭제합니다. 로그인 전제이므로 jwt 토큰을 'Authentication Bearer (토큰)'형태로 헤더에 담아야합니다.",
         security=[{'Bearer': []}]
     )
     def delete(self, request, format=None):
@@ -655,7 +655,7 @@ class PasswordResetView(APIView):
             400: openapi.Response(description='잘못된 요청'),
             404: openapi.Response(description='사용자를 찾을 수 없습니다')
         },
-        operation_description="비밀번호 재설정"
+        operation_description="(비밀번호 찾기 전용) 비밀번호 재설정"
     )
     def post(self, request, *args, **kwargs):
         email = request.data.get('email')
