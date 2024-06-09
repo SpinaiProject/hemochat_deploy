@@ -34,116 +34,116 @@ ALLOWED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png']
 MAX_IMAGE_SIZE_MB = 5
 
 
-@swagger_auto_schema(
-    method='post',
-    responses={
-        201: openapi.Response(
-            description="채팅방이 성공적으로 생성되었습니다.",
-            schema=openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                properties={
-                    'chatroom_id': openapi.Schema(type=openapi.TYPE_STRING, description='생성된 채팅방 ID')
-                }
-            )
-        ),
-        500: openapi.Response(description="Internal server error")
-    },
-    operation_description="체험형 채팅방을 생성합니다."
-)
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def create_temp_chatroom(request):
-    try:
-        empty_chatroom = client.beta.threads.create()
-        chatroom = TempChatroom.objects.create(
-            chatroom_id=empty_chatroom.id
-        )
-        return Response({
-            'chatroom_id': chatroom.chatroom_id,
-        }, status=status.HTTP_201_CREATED)
-    except Exception as e:
-        return Response({
-            'error': 'An unexpected error occurred: {}'.format(str(e))
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-def validate_image(image: UploadedFile):
-    ext = os.path.splitext(image.name)[1].lower()
-    if ext not in ALLOWED_IMAGE_EXTENSIONS:
-        raise ValidationError('Unsupported file extension.')
-
-    if image.size > MAX_IMAGE_SIZE_MB * 1024 * 1024:
-        raise ValidationError('File size exceeds the allowed limit of 5MB.')
-
-    valid_mime_types = ['image/jpeg', 'image/png', 'image/gif']
-    if image.content_type not in valid_mime_types:
-        raise ValidationError('Unsupported file type.')
-
-
-@swagger_auto_schema(
-    method='post',
-    manual_parameters=[
-        openapi.Parameter(
-            'chatroom_id',
-            openapi.IN_PATH,
-            description="채팅방 ID",
-            type=openapi.TYPE_STRING,
-            required=True
-        ),
-        openapi.Parameter(
-            'image',
-            openapi.IN_FORM,
-            description="업로드할 이미지 파일",
-            type=openapi.TYPE_FILE,
-            required=True
-        ),
-    ],
-    responses={
-        200: openapi.Response(
-            description="이미지가 정상적으로 업로드되었습니다.",
-            schema=openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                properties={
-                    'chatroom_id': openapi.Schema(type=openapi.TYPE_STRING, description='채팅방 ID'),
-                    'image_url': openapi.Schema(type=openapi.TYPE_STRING, description='이미지 URL')
-                }
-            )
-        ),
-        400: openapi.Response(description="Bad request"),
-        404: openapi.Response(description="Chatroom not found"),
-        500: openapi.Response(description="Internal server error")
-    },
-    operation_description="임시 채팅방에 이미지를 업로드합니다."
-)
-@api_view(['POST'])
-@permission_classes([AllowAny])
-@parser_classes([MultiPartParser, FormParser])
-def upload_temp_image(request, chatroom_id):
-    try:
-        chatroom = TempChatroom.objects.get(chatroom_id=chatroom_id)
-        if 'image' not in request.FILES:
-            return Response({'error': 'No image file provided'}, status=status.HTTP_400_BAD_REQUEST)
-
-        image = request.FILES['image']
-
-        try:
-            validate_image(image)
-        except ValidationError as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-        chatroom.image = image
-        chatroom.save()
-
-        return Response({
-            'chatroom_id': chatroom.chatroom_id,
-            'image_url': chatroom.image.url if chatroom.image else None
-        }, status=status.HTTP_200_OK)
-
-    except TempChatroom.DoesNotExist:
-        return Response({'error': 'Chatroom not found'}, status=status.HTTP_404_NOT_FOUND)
-    except Exception as e:
-        return Response({'error': f'An error occurred while updating the image: {str(e)}'},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+# @swagger_auto_schema(
+#     method='post',
+#     responses={
+#         201: openapi.Response(
+#             description="채팅방이 성공적으로 생성되었습니다.",
+#             schema=openapi.Schema(
+#                 type=openapi.TYPE_OBJECT,
+#                 properties={
+#                     'chatroom_id': openapi.Schema(type=openapi.TYPE_STRING, description='생성된 채팅방 ID')
+#                 }
+#             )
+#         ),
+#         500: openapi.Response(description="Internal server error")
+#     },
+#     operation_description="(체험페이지 전용) 비로그인 상태로 체험형 채팅방을 생성합니다. 체험하기 버튼"
+# )
+# @api_view(['POST'])
+# @permission_classes([AllowAny])
+# def create_temp_chatroom(request):
+#     try:
+#         empty_chatroom = client.beta.threads.create()
+#         chatroom = TempChatroom.objects.create(
+#             chatroom_id=empty_chatroom.id
+#         )
+#         return Response({
+#             'chatroom_id': chatroom.chatroom_id,
+#         }, status=status.HTTP_201_CREATED)
+#     except Exception as e:
+#         return Response({
+#             'error': 'An unexpected error occurred: {}'.format(str(e))
+#         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+#
+#
+# def validate_image(image: UploadedFile):
+#     ext = os.path.splitext(image.name)[1].lower()
+#     if ext not in ALLOWED_IMAGE_EXTENSIONS:
+#         raise ValidationError('Unsupported file extension.')
+#
+#     if image.size > MAX_IMAGE_SIZE_MB * 1024 * 1024:
+#         raise ValidationError('File size exceeds the allowed limit of 5MB.')
+#
+#     valid_mime_types = ['image/jpeg', 'image/png', 'image/gif']
+#     if image.content_type not in valid_mime_types:
+#         raise ValidationError('Unsupported file type.')
+#
+#
+# @swagger_auto_schema(
+#     method='post',
+#     manual_parameters=[
+#         openapi.Parameter(
+#             'chatroom_id',
+#             openapi.IN_PATH,
+#             description="채팅방 ID",
+#             type=openapi.TYPE_STRING,
+#             required=True
+#         ),
+#         openapi.Parameter(
+#             'image',
+#             openapi.IN_FORM,
+#             description="업로드할 이미지 파일",
+#             type=openapi.TYPE_FILE,
+#             required=True
+#         ),
+#     ],
+#     responses={
+#         200: openapi.Response(
+#             description="이미지가 정상적으로 업로드되었습니다.",
+#             schema=openapi.Schema(
+#                 type=openapi.TYPE_OBJECT,
+#                 properties={
+#                     'chatroom_id': openapi.Schema(type=openapi.TYPE_STRING, description='채팅방 ID'),
+#                     'image_url': openapi.Schema(type=openapi.TYPE_STRING, description='이미지 URL')
+#                 }
+#             )
+#         ),
+#         400: openapi.Response(description="Bad request"),
+#         404: openapi.Response(description="Chatroom not found"),
+#         500: openapi.Response(description="Internal server error")
+#     },
+#     operation_description="임시 채팅방에 이미지를 업로드합니다."
+# )
+# @api_view(['POST'])
+# @permission_classes([AllowAny])
+# @parser_classes([MultiPartParser, FormParser])
+# def upload_temp_image(request, chatroom_id):
+#     try:
+#         chatroom = TempChatroom.objects.get(chatroom_id=chatroom_id)
+#         if 'image' not in request.FILES:
+#             return Response({'error': 'No image file provided'}, status=status.HTTP_400_BAD_REQUEST)
+#
+#         image = request.FILES['image']
+#
+#         try:
+#             validate_image(image)
+#         except ValidationError as e:
+#             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+#
+#         chatroom.image = image
+#         chatroom.save()
+#
+#         return Response({
+#             'chatroom_id': chatroom.chatroom_id,
+#             'image_url': chatroom.image.url if chatroom.image else None
+#         }, status=status.HTTP_200_OK)
+#
+#     except TempChatroom.DoesNotExist:
+#         return Response({'error': 'Chatroom not found'}, status=status.HTTP_404_NOT_FOUND)
+#     except Exception as e:
+#         return Response({'error': f'An error occurred while updating the image: {str(e)}'},
+#                         status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @swagger_auto_schema(
