@@ -172,9 +172,21 @@ MAX_IMAGE_SIZE_MB = 5
             )
         ),
         400: openapi.Response(description="Bad request"),
+        403: openapi.Response(description="Forbidden"),
         500: openapi.Response(description="Internal server error")
     },
-    operation_description="채팅방을 생성합니다."
+    operation_description="""
+    새로운 채팅방을 생성하고 그 채팅방 ID를 발급받는 API입니다. (체험형, 가입자용 공용)
+    리스폰스에 담긴 채팅방 ID는 이후 채팅방 입장, 삭제, 메시지 전송 API 사용 시 경로 변수로 URL에 첨부해서 채팅방을 특정하는 데 사용합니다.
+
+    [리퀘스트 바디]
+    - 체험형 채팅방인 경우: record_ids는 로그인 유저의 경우 로그인된 유저의 이미지 ID 목록을, 비로그인 유저의 경우 null로 설정합니다.
+    - title: 채팅방 제목은 반드시 입력해야 합니다.
+
+    [헤더에 JWT 인증 토큰]
+    - 체험판 페이지에서는 부착할 필요 없고, 로그인 전용 페이지에서 시도하는 경우 붙여주세요.
+    - JWT 토큰을 'Authorization: Bearer {토큰}' 형태로 헤더에 담아야 합니다.
+    """
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -261,7 +273,12 @@ def update_chatroom_cache_on_create(user_id, chatroom, records):
         ),
         400: openapi.Response(description="Bad request")
     },
-    operation_description="사용자의 채팅방 목록을 반환합니다."
+    operation_description="""사용자의 채팅방 목록을 반환합니다.
+    [경로 파라미터]
+    채팅방 ID를 경로 파라미터로 사용해 채팅방을 특정합니다.
+    
+    [헤더에 jwt 인증 토큰]
+     로그인 전제이므로 jwt 토큰을 'Authorization: Bearer {토큰}'형태로 헤더에 담아야합니다."""
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -289,7 +306,7 @@ def list_chatroom(request):
             'chatroom_id',
             openapi.IN_PATH,
             description="상세 정보를 조회할 채팅방의 ID",
-            type=openapi.TYPE_INTEGER
+            type=openapi.TYPE_STRING
         )
     ],
     responses={
@@ -351,7 +368,16 @@ def list_chatroom(request):
                 }
             )
         )
-    }
+    },
+    operation_description="""채팅방 입장 시 사용합니다. 채팅방의 상세 정보와 메시지 내역을 조회합니다.
+    [경로 파라미터]
+    채팅방 ID를 경로 파라미터로 사용해 채팅방을 특정합니다.
+    
+    [헤더에 jwt인증토큰]
+    서버측에서는 특정된 채팅방이 체험용인지, 정규가입자의 것인지 식별해냅니다.
+    정규가입자의 것인 경우에는 로그인 전제이므로 jwt 토큰을 'Authorization: Bearer {토큰}'형태로 헤더에 담을 것을 요구합니다.
+    체험용은 jwt 토큰 필요없습니다.
+    """
 )
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -415,10 +441,16 @@ def enter_chatroom(request, chatroom_id):
     responses={
         204: openapi.Response(description="채팅방이 삭제되었습니다"),
         400: openapi.Response(description="Bad request"),
-        404: openapi.Response(description="존재하지 않는 채팅방입니다"),
+        404: openapi.Response(description="존재하지 않거나 삭제 권한이 없는 채팅방입니다."),
         500: openapi.Response(description="Internal server error")
     },
-    operation_description="채팅방을 삭제합니다."
+    operation_description="""채팅방을 삭제합니다.
+    
+     [경로 파라미터]
+     채팅방 ID를 경로 파라미터로 사용해 채팅방을 특정합니다.
+    
+     [헤더에 jwt 인증 토큰]
+     로그인 전제이므로 jwt 토큰을 'Authorization: Bearer {토큰}'형태로 헤더에 담아야합니다."""
 )
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
@@ -513,9 +545,25 @@ def update_chatroom_cache(chatroom_id, content, accumulated_responses):
             )
         ),
         400: openapi.Response(description="Bad request"),
+        401: openapi.Response(description="Authentication credentials were not provided."),
         500: openapi.Response(description="Internal server error")
     },
-    operation_description="채팅방에 메시지를 생성하고 스트리밍된 응답을 반환합니다."
+    operation_description="""
+    AI에게 질문을 보내고 chatgpt응답과 같이 스트리밍된 응답을 반환하는 중요한 api입니다.
+    [UI 요구사항]
+    AI 응답이 완료되기 전까지, 재차 이 질문 API를 사용할 수 없도록, 질문 전송버튼을 비활성화해주세요.
+    
+    [경로 파라미터]
+    채팅방 ID를 경로 파라미터로 사용해 어느 채팅방에서 질문을 전송하고자 하는지 특정합니다.
+    
+    [헤더에 jwt 인증 토큰]
+    서버측에서는 특정된 채팅방이 체험용인지, 정규가입자의 것인지 식별해냅니다.
+    정규가입자의 것인 경우에는 로그인 전제이므로 jwt 토큰을 'Authorization: Bearer {토큰}'형태로 헤더에 담을 것을 요구합니다.
+    체험용은 jwt 토큰 필요없습니다.
+    
+    [참고]
+    체험용 채팅방인 경우, 메시지를 보낼 때마다 채팅횟수가 증가하고, 5회 초과시 메시지 전송을 서버측에서 거부합니다.
+    """
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
