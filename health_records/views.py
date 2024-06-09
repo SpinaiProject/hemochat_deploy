@@ -2,6 +2,8 @@ import base64,datetime,json,os,time,uuid,requests
 
 import requests
 from django.http import JsonResponse, StreamingHttpResponse
+from django.shortcuts import get_object_or_404
+
 from rest_framework.decorators import api_view, permission_classes,parser_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
@@ -45,12 +47,9 @@ client = OpenAI(api_key=OPEN_AI_API_KEY)
     }
 )
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])  # 헤더에 Authorization': Bearer userToken 형태로 jwt토큰 담아서 요청해야 함
+@permission_classes([AllowAny])
 @parser_classes([MultiPartParser, FormParser])
 def upload_images(request):
-    user = request.user
-    if not user.is_authenticated:
-        return JsonResponse({"error": "User is not authenticated."}, status=401)
     if 'images' not in request.FILES:
         return Response({'error': 'No image files provided'}, status=400)
 
@@ -64,13 +63,12 @@ def upload_images(request):
             return Response({'error': "각 이미지 사이즈는 10MB를 넘길 수 없습니다."}, status=400)
 
         try:
-            health_record_image = HealthRecordImage(image=image_file, user=user)
+            health_record_image = HealthRecordImage(image=image_file, user=request.user if request.user.is_authenticated else None)
             health_record_image.save()
         except Exception as e:
             return Response({'error': str(e)}, status=500)
 
     return Response({'message': '이미지가 정상 업로드 되었습니다'})
-
 
 @swagger_auto_schema(
     method='get',
@@ -142,7 +140,7 @@ def delete_health_records(request):
     non_existing_ids = set(record_ids) - set(existing_ids)
 
     if non_existing_ids:
-        return Response({'error': '존재하지 않는 검사지에 대한 요청입니다'}, status=404)
+        return Response({'error': '존재하지 않거나 권한 없는 이미지에 대한 요청입니다'}, status=404)
 
     records_to_delete.delete()
     return Response({'message': '성공적으로 삭제되었습니다'})
@@ -270,24 +268,22 @@ chatroom_id_schema = openapi.Schema(
 @permission_classes([AllowAny])
 def general_ocr_analysis(request):
     record_id = request.data.get('record_id', None)
-    chatroom_id = request.data.get('chatroom_id', None)
 
-    if not record_id and not chatroom_id:
-        return Response({'error': 'record_id 또는 chatroom_id를 제공해야 합니다.'}, status=400)
+    if not record_id:
+        return Response({'error': 'record_id를 제공해야 합니다.'}, status=400)
 
-    target_record = None
-    if not chatroom_id:
-        if not request.user.is_authenticated:
-            return Response({'error': '로그인이 필요합니다.'}, status=401)
-        try:
-            target_record = HealthRecordImage.objects.get(user=request.user, pk=record_id)
-        except HealthRecordImage.DoesNotExist:
-            return Response({'error': '해당 이미지를 찾을 수 없습니다.'}, status=404)
-    else:
-        try:
-            target_record = TempChatroom.objects.get(chatroom_id=chatroom_id)
-        except TempChatroom.DoesNotExist:
-            return Response({'error': '해당 채팅방을 찾을 수 없습니다.'}, status=404)
+    target_record = get_object_or_404(HealthRecordImage, pk=record_id)
+
+    if target_record.ocr_text:
+        return Response({'error': '이미 OCR 분석이 완료된 이미지입니다.'}, status=400)
+
+    user = request.user
+    if target_record.user:
+        if not user.is_authenticated or target_record.user != user:
+            return Response({'error': '로그인이 필요합니다.' if not user.is_authenticated else '해당 이미지에 접근할 권한이 없습니다.'},
+                            status=401 if not user.is_authenticated else 403)
+    elif user.is_authenticated:
+        return Response({'error': '체험판 이미지를 분석할 수 없습니다.'}, status=403)
 
     try:
         structured_data = extract_ocr_texts(target_record)
@@ -307,15 +303,8 @@ def general_ocr_analysis(request):
             chunk_message = chunk.choices[0].delta.content
             state = chunk.choices[0].finish_reason
             if state == 'stop':
-                if isinstance(target_record, HealthRecordImage):
-                    target_record.ocr_text = complete_analysis_result
-                    target_record.save()
-                elif isinstance(target_record, TempChatroom):
-                    client.beta.threads.messages.create(
-                        thread_id=chatroom_id,
-                        role="assistant",
-                        content=OPEN_AI_CHAT_INSTRUCTION + complete_analysis_result,
-                    )
+                target_record.ocr_text = complete_analysis_result
+                target_record.save()
                 break
             else:
                 complete_analysis_result += chunk_message
