@@ -383,7 +383,6 @@ def list_chatroom(request):
 @permission_classes([AllowAny])
 def enter_chatroom(request, chatroom_id):
     try:
-        user = request.user
         user = request.user if request.user.is_authenticated else None
         chatroom = get_object_or_404(ChatRoom, chatroom_id=chatroom_id)
         if not chatroom.is_temporary and not user:
@@ -400,7 +399,8 @@ def enter_chatroom(request, chatroom_id):
         thread_messages = client.beta.threads.messages.list(chatroom.chatroom_id)
         total_messages = []
         user_message_found = False
-        for message in thread_messages:
+
+        for message in reversed(list(thread_messages)):
             if message.role == 'user':
                 user_message_found = True
 
@@ -413,8 +413,6 @@ def enter_chatroom(request, chatroom_id):
                         "role": message.role,
                         "text": content_block.text.value
                     })
-
-        total_messages.reverse()
 
         response_data = {
             'chatroom': serializer.data,
