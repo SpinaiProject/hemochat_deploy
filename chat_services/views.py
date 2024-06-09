@@ -34,116 +34,116 @@ ALLOWED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png']
 MAX_IMAGE_SIZE_MB = 5
 
 
-@swagger_auto_schema(
-    method='post',
-    responses={
-        201: openapi.Response(
-            description="채팅방이 성공적으로 생성되었습니다.",
-            schema=openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                properties={
-                    'chatroom_id': openapi.Schema(type=openapi.TYPE_STRING, description='생성된 채팅방 ID')
-                }
-            )
-        ),
-        500: openapi.Response(description="Internal server error")
-    },
-    operation_description="체험형 채팅방을 생성합니다."
-)
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def create_temp_chatroom(request):
-    try:
-        empty_chatroom = client.beta.threads.create()
-        chatroom = TempChatroom.objects.create(
-            chatroom_id=empty_chatroom.id
-        )
-        return Response({
-            'chatroom_id': chatroom.chatroom_id,
-        }, status=status.HTTP_201_CREATED)
-    except Exception as e:
-        return Response({
-            'error': 'An unexpected error occurred: {}'.format(str(e))
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-def validate_image(image: UploadedFile):
-    ext = os.path.splitext(image.name)[1].lower()
-    if ext not in ALLOWED_IMAGE_EXTENSIONS:
-        raise ValidationError('Unsupported file extension.')
-
-    if image.size > MAX_IMAGE_SIZE_MB * 1024 * 1024:
-        raise ValidationError('File size exceeds the allowed limit of 5MB.')
-
-    valid_mime_types = ['image/jpeg', 'image/png', 'image/gif']
-    if image.content_type not in valid_mime_types:
-        raise ValidationError('Unsupported file type.')
-
-
-@swagger_auto_schema(
-    method='post',
-    manual_parameters=[
-        openapi.Parameter(
-            'chatroom_id',
-            openapi.IN_PATH,
-            description="채팅방 ID",
-            type=openapi.TYPE_STRING,
-            required=True
-        ),
-        openapi.Parameter(
-            'image',
-            openapi.IN_FORM,
-            description="업로드할 이미지 파일",
-            type=openapi.TYPE_FILE,
-            required=True
-        ),
-    ],
-    responses={
-        200: openapi.Response(
-            description="이미지가 정상적으로 업로드되었습니다.",
-            schema=openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                properties={
-                    'chatroom_id': openapi.Schema(type=openapi.TYPE_STRING, description='채팅방 ID'),
-                    'image_url': openapi.Schema(type=openapi.TYPE_STRING, description='이미지 URL')
-                }
-            )
-        ),
-        400: openapi.Response(description="Bad request"),
-        404: openapi.Response(description="Chatroom not found"),
-        500: openapi.Response(description="Internal server error")
-    },
-    operation_description="임시 채팅방에 이미지를 업로드합니다."
-)
-@api_view(['POST'])
-@permission_classes([AllowAny])
-@parser_classes([MultiPartParser, FormParser])
-def upload_temp_image(request, chatroom_id):
-    try:
-        chatroom = TempChatroom.objects.get(chatroom_id=chatroom_id)
-        if 'image' not in request.FILES:
-            return Response({'error': 'No image file provided'}, status=status.HTTP_400_BAD_REQUEST)
-
-        image = request.FILES['image']
-
-        try:
-            validate_image(image)
-        except ValidationError as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-        chatroom.image = image
-        chatroom.save()
-
-        return Response({
-            'chatroom_id': chatroom.chatroom_id,
-            'image_url': chatroom.image.url if chatroom.image else None
-        }, status=status.HTTP_200_OK)
-
-    except TempChatroom.DoesNotExist:
-        return Response({'error': 'Chatroom not found'}, status=status.HTTP_404_NOT_FOUND)
-    except Exception as e:
-        return Response({'error': f'An error occurred while updating the image: {str(e)}'},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+# @swagger_auto_schema(
+#     method='post',
+#     responses={
+#         201: openapi.Response(
+#             description="채팅방이 성공적으로 생성되었습니다.",
+#             schema=openapi.Schema(
+#                 type=openapi.TYPE_OBJECT,
+#                 properties={
+#                     'chatroom_id': openapi.Schema(type=openapi.TYPE_STRING, description='생성된 채팅방 ID')
+#                 }
+#             )
+#         ),
+#         500: openapi.Response(description="Internal server error")
+#     },
+#     operation_description="(체험페이지 전용) 비로그인 상태로 체험형 채팅방을 생성합니다. 체험하기 버튼"
+# )
+# @api_view(['POST'])
+# @permission_classes([AllowAny])
+# def create_temp_chatroom(request):
+#     try:
+#         empty_chatroom = client.beta.threads.create()
+#         chatroom = TempChatroom.objects.create(
+#             chatroom_id=empty_chatroom.id
+#         )
+#         return Response({
+#             'chatroom_id': chatroom.chatroom_id,
+#         }, status=status.HTTP_201_CREATED)
+#     except Exception as e:
+#         return Response({
+#             'error': 'An unexpected error occurred: {}'.format(str(e))
+#         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+#
+#
+# def validate_image(image: UploadedFile):
+#     ext = os.path.splitext(image.name)[1].lower()
+#     if ext not in ALLOWED_IMAGE_EXTENSIONS:
+#         raise ValidationError('Unsupported file extension.')
+#
+#     if image.size > MAX_IMAGE_SIZE_MB * 1024 * 1024:
+#         raise ValidationError('File size exceeds the allowed limit of 5MB.')
+#
+#     valid_mime_types = ['image/jpeg', 'image/png', 'image/gif']
+#     if image.content_type not in valid_mime_types:
+#         raise ValidationError('Unsupported file type.')
+#
+#
+# @swagger_auto_schema(
+#     method='post',
+#     manual_parameters=[
+#         openapi.Parameter(
+#             'chatroom_id',
+#             openapi.IN_PATH,
+#             description="채팅방 ID",
+#             type=openapi.TYPE_STRING,
+#             required=True
+#         ),
+#         openapi.Parameter(
+#             'image',
+#             openapi.IN_FORM,
+#             description="업로드할 이미지 파일",
+#             type=openapi.TYPE_FILE,
+#             required=True
+#         ),
+#     ],
+#     responses={
+#         200: openapi.Response(
+#             description="이미지가 정상적으로 업로드되었습니다.",
+#             schema=openapi.Schema(
+#                 type=openapi.TYPE_OBJECT,
+#                 properties={
+#                     'chatroom_id': openapi.Schema(type=openapi.TYPE_STRING, description='채팅방 ID'),
+#                     'image_url': openapi.Schema(type=openapi.TYPE_STRING, description='이미지 URL')
+#                 }
+#             )
+#         ),
+#         400: openapi.Response(description="Bad request"),
+#         404: openapi.Response(description="Chatroom not found"),
+#         500: openapi.Response(description="Internal server error")
+#     },
+#     operation_description="임시 채팅방에 이미지를 업로드합니다."
+# )
+# @api_view(['POST'])
+# @permission_classes([AllowAny])
+# @parser_classes([MultiPartParser, FormParser])
+# def upload_temp_image(request, chatroom_id):
+#     try:
+#         chatroom = TempChatroom.objects.get(chatroom_id=chatroom_id)
+#         if 'image' not in request.FILES:
+#             return Response({'error': 'No image file provided'}, status=status.HTTP_400_BAD_REQUEST)
+#
+#         image = request.FILES['image']
+#
+#         try:
+#             validate_image(image)
+#         except ValidationError as e:
+#             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+#
+#         chatroom.image = image
+#         chatroom.save()
+#
+#         return Response({
+#             'chatroom_id': chatroom.chatroom_id,
+#             'image_url': chatroom.image.url if chatroom.image else None
+#         }, status=status.HTTP_200_OK)
+#
+#     except TempChatroom.DoesNotExist:
+#         return Response({'error': 'Chatroom not found'}, status=status.HTTP_404_NOT_FOUND)
+#     except Exception as e:
+#         return Response({'error': f'An error occurred while updating the image: {str(e)}'},
+#                         status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @swagger_auto_schema(
@@ -172,35 +172,69 @@ def upload_temp_image(request, chatroom_id):
             )
         ),
         400: openapi.Response(description="Bad request"),
+        403: openapi.Response(description="Forbidden"),
         500: openapi.Response(description="Internal server error")
     },
-    operation_description="채팅방을 생성합니다."
+    operation_description="""
+    새로운 채팅방을 생성하고 그 채팅방 ID를 발급받는 API입니다. (체험형, 가입자용 공용)
+    리스폰스에 담긴 채팅방 ID는 이후 채팅방 입장, 삭제, 메시지 전송 API 사용 시 경로 변수로 URL에 첨부해서 채팅방을 특정하는 데 사용합니다.
+
+    [리퀘스트 바디]
+    - 체험형 채팅방인 경우: record_ids는 로그인 유저의 경우 로그인된 유저의 이미지 ID 목록을, 비로그인 유저의 경우 null로 설정합니다.
+    - title: 채팅방 제목은 반드시 입력해야 합니다.
+
+    [헤더에 JWT 인증 토큰]
+    - 체험판 페이지에서는 부착할 필요 없고, 로그인 전용 페이지에서 시도하는 경우 붙여주세요.
+    - JWT 토큰을 'Authorization: Bearer {토큰}' 형태로 헤더에 담아야 합니다.
+    """
 )
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def create_chatroom(request):
     try:
-        user = request.user
+        user = request.user if request.user.is_authenticated else None
         data = json.loads(request.body)
         record_ids = data.get('record_ids')
         title = data.get('title')
+
         if not title:
             return Response({"error": "채팅방 제목을 기입하세요."}, status=400)
+
         records = HealthRecordImage.objects.filter(pk__in=record_ids)
         if not records.exists():
             return Response({"error": "이미지를 선택하지 않았거나 존재하지 않는 이미지입니다."}, status=400)
 
+        for record in records:
+            if user:
+                if record.user and record.user != user:
+                    return Response({"error": "로그인한 사용자가 소유하지 않은 이미지가 포함되어 있습니다."}, status=403)
+                if not record.user:
+                    return Response({"error": "로그인 사용자는 비로그인 사용자의 이미지를 사용할 수 없습니다."}, status=403)
+            else:
+                if record.user:
+                    return Response({"error": "비로그인 사용자는 로그인된 사용자의 이미지를 사용할 수 없습니다."}, status=403)
+
         init_messages = [{"role": "assistant", "content": OPEN_AI_CHAT_INSTRUCTION}]
-        init_messages.extend([{"role": "assistant", "content": record.ocr_text} for record in records])
+        for record in records:
+            if not record.ocr_text.strip():
+                return Response({"error": "AI분석을 하지 않은 이미지가 포함되어 있습니다. 먼저 이미지 분석을 수행하세요."}, status=400)
+            init_messages.append({"role": "assistant", "content": record.ocr_text})
+
         empty_chatroom = client.beta.threads.create(messages=init_messages)
-        chatroom = ChatRoom.objects.create(
-            user=user,
-            chatroom_id=empty_chatroom.id,
-            title=title
-        )
+
+        chatroom_data = {
+            'chatroom_id': empty_chatroom.id,
+            'title': title,
+            'is_temporary': not user  # 비로그인 사용자의 경우 임시 채팅방으로 표시
+        }
+
+        if user:
+            chatroom_data['user'] = user
+
+        chatroom = ChatRoom.objects.create(**chatroom_data)
         chatroom.health_records.set(records)
 
-        update_chatroom_cache_on_create(user.id, chatroom, records)
+        update_chatroom_cache_on_create(user.id if user else None, chatroom, records)
 
         return Response({
             "message": "채팅방이 생성되었습니다",
@@ -239,7 +273,12 @@ def update_chatroom_cache_on_create(user_id, chatroom, records):
         ),
         400: openapi.Response(description="Bad request")
     },
-    operation_description="사용자의 채팅방 목록을 반환합니다."
+    operation_description="""사용자의 채팅방 목록을 반환합니다.
+    [경로 파라미터]
+    채팅방 ID를 경로 파라미터로 사용해 채팅방을 특정합니다.
+    
+    [헤더에 jwt 인증 토큰]
+     로그인 전제이므로 jwt 토큰을 'Authorization: Bearer {토큰}'형태로 헤더에 담아야합니다."""
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -267,7 +306,7 @@ def list_chatroom(request):
             'chatroom_id',
             openapi.IN_PATH,
             description="상세 정보를 조회할 채팅방의 ID",
-            type=openapi.TYPE_INTEGER
+            type=openapi.TYPE_STRING
         )
     ],
     responses={
@@ -329,25 +368,37 @@ def list_chatroom(request):
                 }
             )
         )
-    }
+    },
+    operation_description="""채팅방 입장 시 사용합니다. 채팅방의 상세 정보와 메시지 내역을 조회합니다.
+    [경로 파라미터]
+    채팅방 ID를 경로 파라미터로 사용해 채팅방을 특정합니다.
+    
+    [헤더에 jwt인증토큰]
+    서버측에서는 특정된 채팅방이 체험용인지, 정규가입자의 것인지 식별해냅니다.
+    정규가입자의 것인 경우에는 로그인 전제이므로 jwt 토큰을 'Authorization: Bearer {토큰}'형태로 헤더에 담을 것을 요구합니다.
+    체험용은 jwt 토큰 필요없습니다.
+    """
 )
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def enter_chatroom(request, chatroom_id):
     try:
-        user = request.user
+        user = request.user if request.user.is_authenticated else None
+        chatroom = get_object_or_404(ChatRoom, chatroom_id=chatroom_id)
+        if not chatroom.is_temporary and not user:
+            return Response({"error": "Authentication credentials were not provided."}, status=401)
+
         cache_key = f"chatroom_{chatroom_id}_details"
         cached_data = cache.get(cache_key)
         if cached_data:
             return Response(json.loads(cached_data))
 
-        chatroom = user.chatrooms.get(chatroom_id=chatroom_id)
-        serializer = ChatRoomDetailSerializer(chatroom)
-
+        serializer = ChatRoomDetailSerializer(chatroom, context={'request': request})
         thread_messages = client.beta.threads.messages.list(chatroom.chatroom_id)
         total_messages = []
         user_message_found = False
-        for message in thread_messages:
+
+        for message in reversed(list(thread_messages)):
             if message.role == 'user':
                 user_message_found = True
 
@@ -361,8 +412,6 @@ def enter_chatroom(request, chatroom_id):
                         "text": content_block.text.value
                     })
 
-        total_messages.reverse()
-
         response_data = {
             'chatroom': serializer.data,
             'messages': total_messages
@@ -373,7 +422,6 @@ def enter_chatroom(request, chatroom_id):
         return Response({'error': '존재하지 않는 채팅방입니다'}, status=404)
     except Exception as e:
         return Response({'error': str(e)}, status=500)
-
 
 @swagger_auto_schema(
     method='delete',
@@ -389,10 +437,16 @@ def enter_chatroom(request, chatroom_id):
     responses={
         204: openapi.Response(description="채팅방이 삭제되었습니다"),
         400: openapi.Response(description="Bad request"),
-        404: openapi.Response(description="존재하지 않는 채팅방입니다"),
+        404: openapi.Response(description="존재하지 않거나 삭제 권한이 없는 채팅방입니다."),
         500: openapi.Response(description="Internal server error")
     },
-    operation_description="채팅방을 삭제합니다."
+    operation_description="""채팅방을 삭제합니다.
+    
+     [경로 파라미터]
+     채팅방 ID를 경로 파라미터로 사용해 채팅방을 특정합니다.
+    
+     [헤더에 jwt 인증 토큰]
+     로그인 전제이므로 jwt 토큰을 'Authorization: Bearer {토큰}'형태로 헤더에 담아야합니다."""
 )
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
@@ -411,7 +465,7 @@ def delete_chatroom(request, chatroom_id):
         else:
             return Response({'message': '채팅방 삭제 실패'}, status=400)
     except ChatRoom.DoesNotExist:
-        return Response({'error': '존재하지 않는 채팅방입니다'}, status=404)
+        return Response({'error': '존재하지 않거나 삭제 권한이 없는 채팅방입니다.'}, status=404)
     except Exception as e:
         return Response({'error': str(e)}, status=400)
 
@@ -487,14 +541,34 @@ def update_chatroom_cache(chatroom_id, content, accumulated_responses):
             )
         ),
         400: openapi.Response(description="Bad request"),
+        401: openapi.Response(description="Authentication credentials were not provided."),
         500: openapi.Response(description="Internal server error")
     },
-    operation_description="채팅방에 메시지를 생성하고 스트리밍된 응답을 반환합니다."
+    operation_description="""
+    AI에게 질문을 보내고 chatgpt응답과 같이 스트리밍된 응답을 반환하는 중요한 api입니다.
+    [UI 요구사항]
+    AI 응답이 완료되기 전까지, 재차 이 질문 API를 사용할 수 없도록, 질문 전송버튼을 비활성화해주세요.
+    
+    [경로 파라미터]
+    채팅방 ID를 경로 파라미터로 사용해 어느 채팅방에서 질문을 전송하고자 하는지 특정합니다.
+    
+    [헤더에 jwt 인증 토큰]
+    서버측에서는 특정된 채팅방이 체험용인지, 정규가입자의 것인지 식별해냅니다.
+    정규가입자의 것인 경우에는 로그인 전제이므로 jwt 토큰을 'Authorization: Bearer {토큰}'형태로 헤더에 담을 것을 요구합니다.
+    체험용은 jwt 토큰 필요없습니다.
+    
+    [참고]
+    체험용 채팅방인 경우, 메시지를 보낼 때마다 채팅횟수가 증가하고, 5회 초과시 메시지 전송을 서버측에서 거부합니다.
+    """
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def create_message(request, chatroom_id):
     content = request.data.get("content")
+    chatroom = get_object_or_404(ChatRoom, chatroom_id=chatroom_id)
+
+    if not request.user.is_authenticated and not chatroom.is_temporary:
+        return Response({"error": "Authentication credentials were not provided."}, status=401)
 
     def event_stream():
         accumulated_responses = []
@@ -523,11 +597,10 @@ def create_message(request, chatroom_id):
         finally:
             if accumulated_responses:
                 update_chatroom_cache(chatroom_id, content, accumulated_responses)
-            if not request.user.is_authenticated:
+            if chatroom.is_temporary:
                 try:
-                    temp_chatroom = get_object_or_404(TempChatroom, chatroom_id=chatroom_id)
-                    temp_chatroom.chat_num += 1
-                    temp_chatroom.save()
+                    chatroom.chat_num += 1
+                    chatroom.save()
                 except ValidationError as ve:
                     yield f"data: {{\"error\": \"{str(ve)}\"}}\n\n"
 

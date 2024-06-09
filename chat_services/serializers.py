@@ -17,7 +17,7 @@ class ChatRoomListSerializer(serializers.ModelSerializer):
             return None
 
 class ChatRoomDetailSerializer(serializers.ModelSerializer):
-    health_records = HealthRecordImageSerializer(many=True)
+    health_records = HealthRecordImageSerializer(many=True, context={'request': serializers.CurrentUserDefault()})
 
     class Meta:
         model = ChatRoom
