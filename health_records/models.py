@@ -22,3 +22,4 @@ class HealthRecordImage(models.Model):
     image = models.ImageField(upload_to=user_directory_path)
     ocr_text = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    title = models.TextField(blank=True)
