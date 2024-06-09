@@ -96,9 +96,9 @@ def upload_images(request):
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])  # 헤더에 Authorization': Bearer userToken 형태로 jwt토큰 담아서 요청해야 함
-def user_health_records(request):
+def list_user_health_records(request):
     records = HealthRecordImage.objects.filter(user=request.user)
-    serializer = HealthRecordImageSerializer(records, many=True)
+    serializer = HealthRecordImageSerializer(records, many=True, context={'request': request})
     return Response(serializer.data)
 
 
