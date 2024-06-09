@@ -42,9 +42,17 @@ client = OpenAI(api_key=OPEN_AI_API_KEY)
     responses={
         200: openapi.Response(description="이미지가 정상 업로드 되었습니다"),
         400: openapi.Response(description="Bad request"),
-        401: openapi.Response(description="Unauthorized"),
         500: openapi.Response(description="Internal server error")
-    }
+    },
+    operation_description="""
+    사용자가 이미지를 업로드합니다.(체험판, 로그인 전제 공용)
+    업로드된 이미지는 해당 사용자의 HealthRecordImage 모델과 연결됩니다.
+    인증되지 않은 사용자의 경우 이미지는 익명 사용자 디렉토리에 저장됩니다.
+    
+    [헤더에 jwt 인증 토큰]
+    체험판 페이지에서는 부착할 필요없고, 로그인 전용 페이지에서 시도하는 경우 붙여주세요.
+    jwt 토큰은 'Authorization: Bearer {토큰}'형태로 헤더에 담아야합니다.
+    """
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -79,7 +87,11 @@ def upload_images(request):
         ),
         401: openapi.Response(description="Unauthorized")
     },
-    operation_description="사용자의 건강 기록을 조회합니다.",
+    operation_description="""
+    이미지 id(여러개 가능) 리스트를 받아 그에 해당하는 이미지 목록을 반환합니다.
+    
+    [헤더에 jwt 인증 토큰] 
+    로그인 전제이므로 jwt 토큰을 'Authorization: Bearer {토큰}'형태로 헤더에 담아야합니다.""",
     security=[{'Bearer': []}]
 )
 @api_view(['GET'])
@@ -125,7 +137,16 @@ def date_filtered_user_health_records(request):
         200: openapi.Response(description="성공적으로 삭제되었습니다"),
         400: openapi.Response(description="삭제할 검사지를 선택하세요"),
         404: openapi.Response(description="존재하지 않는 검사지에 대한 요청입니다"),
-    }
+    },
+    operation_description="""
+    이미지 삭제 API 입니다.
+    
+    [리퀘스트 바디]
+    이미지 id(여러개 가능) 리스트를 담아 요청해야합니다.
+    
+    [헤더에 jwt 인증 토큰]
+    로그인 전제이므로 jwt 토큰을 'Authorization: Bearer {토큰}'형태로 헤더에 담아야합니다.""",
+    security=[{'Bearer': []}]
 )
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])  # 헤더에 Authorization': Bearer userToken 형태로 jwt토큰 담아서 요청해야 함
@@ -233,36 +254,37 @@ def extract_ocr_texts(record):
         return json.dumps(structured_table_data, ensure_ascii=False)
 
 
-record_id_schema = openapi.Schema(
-    type=openapi.TYPE_OBJECT,
-    properties={
-        'record_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='Record ID'),
-    },
-    required=['record_id'],
-    description="정식채팅방"
-)
-
-chatroom_id_schema = openapi.Schema(
-    type=openapi.TYPE_OBJECT,
-    properties={
-        'chatroom_id': openapi.Schema(type=openapi.TYPE_STRING, description='Chatroom ID'),
-    },
-    required=['chatroom_id'],
-    description="임시채팅방"
-)
 @swagger_auto_schema(
     method='post',
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
-        oneOf=[record_id_schema, chatroom_id_schema],
+        properties={
+            'record_id': openapi.Schema(type=openapi.TYPE_INTEGER, description='Record ID'),
+        },
+        required=['record_id'],
+        description="이미지 레코드 ID를 제공해야 합니다."
     ),
     responses={
         200: openapi.Response(description="OCR 분석이 성공적으로 완료되었습니다"),
-        400: openapi.Response(description="record_id 또는 chatroom_id를 제공해야 합니다."),
+        400: openapi.Response(description="record_id를 제공해야 합니다. 또는 OCR 텍스트가 이미 존재합니다."),
         401: openapi.Response(description="로그인이 필요합니다."),
+        403: openapi.Response(description="해당 이미지에 접근할 권한이 없습니다. 또는 체험판 이미지를 분석할 수 없습니다."),
         404: openapi.Response(description="해당 이미지를 찾을 수 없습니다."),
         500: openapi.Response(description="이미지 분석 오류 발생")
-    }
+    },
+    operation_description="""
+    업로드한 이미지의 OCR 분석 요청을 처리하고 그 결과를 chatgpt응답과 같이 스트리밍된 형태로 제공하는 API입니다.(체험판, 로그인 전용 공용)
+    
+    [UI 요구사항]
+    AI 응답이 완료되기 전까지, 재차 이 질문 API를 사용할 수 없도록, 분석요청 버튼을 비활성화해주세요.
+    
+    [리퀘스트 바디]
+    요청 시, 이미지 '하나'의 id(여러개 불가)인 record_id 제공해야 합니다.
+    
+    [헤더에 jwt 인증 토큰]
+    체험판 페이지에서는 부착할 필요없고, 로그인 전용 페이지에서 시도하는 경우 붙여주세요.
+    jwt 토큰을 'Authorization: Bearer {토큰}'형태로 헤더에 담아야합니다.
+    """
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
