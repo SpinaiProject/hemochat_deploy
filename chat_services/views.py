@@ -177,30 +177,52 @@ MAX_IMAGE_SIZE_MB = 5
     operation_description="채팅방을 생성합니다."
 )
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def create_chatroom(request):
     try:
-        user = request.user
+        user = request.user if request.user.is_authenticated else None
         data = json.loads(request.body)
         record_ids = data.get('record_ids')
         title = data.get('title')
+
         if not title:
             return Response({"error": "채팅방 제목을 기입하세요."}, status=400)
+
         records = HealthRecordImage.objects.filter(pk__in=record_ids)
         if not records.exists():
             return Response({"error": "이미지를 선택하지 않았거나 존재하지 않는 이미지입니다."}, status=400)
 
+        for record in records:
+            if user:
+                if record.user and record.user != user:
+                    return Response({"error": "로그인한 사용자가 소유하지 않은 이미지가 포함되어 있습니다."}, status=403)
+                if not record.user:
+                    return Response({"error": "로그인 사용자는 비로그인 사용자의 이미지를 사용할 수 없습니다."}, status=403)
+            else:
+                if record.user:
+                    return Response({"error": "비로그인 사용자는 로그인된 사용자의 이미지를 사용할 수 없습니다."}, status=403)
+
         init_messages = [{"role": "assistant", "content": OPEN_AI_CHAT_INSTRUCTION}]
-        init_messages.extend([{"role": "assistant", "content": record.ocr_text} for record in records])
+        for record in records:
+            if not record.ocr_text.strip():
+                return Response({"error": "AI분석을 하지 않은 이미지가 포함되어 있습니다. 먼저 이미지 분석을 수행하세요."}, status=400)
+            init_messages.append({"role": "assistant", "content": record.ocr_text})
+
         empty_chatroom = client.beta.threads.create(messages=init_messages)
-        chatroom = ChatRoom.objects.create(
-            user=user,
-            chatroom_id=empty_chatroom.id,
-            title=title
-        )
+
+        chatroom_data = {
+            'chatroom_id': empty_chatroom.id,
+            'title': title,
+            'is_temporary': not user  # 비로그인 사용자의 경우 임시 채팅방으로 표시
+        }
+
+        if user:
+            chatroom_data['user'] = user
+
+        chatroom = ChatRoom.objects.create(**chatroom_data)
         chatroom.health_records.set(records)
 
-        update_chatroom_cache_on_create(user.id, chatroom, records)
+        update_chatroom_cache_on_create(user.id if user else None, chatroom, records)
 
         return Response({
             "message": "채팅방이 생성되었습니다",
@@ -332,10 +354,15 @@ def list_chatroom(request):
     }
 )
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def enter_chatroom(request, chatroom_id):
     try:
         user = request.user
+        user = request.user if request.user.is_authenticated else None
+        chatroom = get_object_or_404(ChatRoom, chatroom_id=chatroom_id)
+        if not chatroom.is_temporary and not user:
+            return Response({"error": "Authentication credentials were not provided."}, status=401)
+
         cache_key = f"chatroom_{chatroom_id}_details"
         cached_data = cache.get(cache_key)
         if cached_data:
@@ -374,7 +401,6 @@ def enter_chatroom(request, chatroom_id):
     except Exception as e:
         return Response({'error': str(e)}, status=500)
 
-
 @swagger_auto_schema(
     method='delete',
     manual_parameters=[
@@ -411,7 +437,7 @@ def delete_chatroom(request, chatroom_id):
         else:
             return Response({'message': '채팅방 삭제 실패'}, status=400)
     except ChatRoom.DoesNotExist:
-        return Response({'error': '존재하지 않는 채팅방입니다'}, status=404)
+        return Response({'error': '존재하지 않거나 삭제 권한이 없는 채팅방입니다.'}, status=404)
     except Exception as e:
         return Response({'error': str(e)}, status=400)
 
@@ -495,6 +521,10 @@ def update_chatroom_cache(chatroom_id, content, accumulated_responses):
 @permission_classes([AllowAny])
 def create_message(request, chatroom_id):
     content = request.data.get("content")
+    chatroom = get_object_or_404(ChatRoom, chatroom_id=chatroom_id)
+
+    if not request.user.is_authenticated and not chatroom.is_temporary:
+        return Response({"error": "Authentication credentials were not provided."}, status=401)
 
     def event_stream():
         accumulated_responses = []
@@ -523,11 +553,10 @@ def create_message(request, chatroom_id):
         finally:
             if accumulated_responses:
                 update_chatroom_cache(chatroom_id, content, accumulated_responses)
-            if not request.user.is_authenticated:
+            if chatroom.is_temporary:
                 try:
-                    temp_chatroom = get_object_or_404(TempChatroom, chatroom_id=chatroom_id)
-                    temp_chatroom.chat_num += 1
-                    temp_chatroom.save()
+                    chatroom.chat_num += 1
+                    chatroom.save()
                 except ValidationError as ve:
                     yield f"data: {{\"error\": \"{str(ve)}\"}}\n\n"
 
