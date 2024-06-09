@@ -393,9 +393,7 @@ def enter_chatroom(request, chatroom_id):
         if cached_data:
             return Response(json.loads(cached_data))
 
-        chatroom = user.chatrooms.get(chatroom_id=chatroom_id)
-        serializer = ChatRoomDetailSerializer(chatroom)
-
+        serializer = ChatRoomDetailSerializer(chatroom, context={'request': request})
         thread_messages = client.beta.threads.messages.list(chatroom.chatroom_id)
         total_messages = []
         user_message_found = False
