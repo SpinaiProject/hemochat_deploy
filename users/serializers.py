@@ -29,18 +29,18 @@ class CustomSignupSerializer(RegisterSerializer):
                 raise serializers.ValidationError("이 이메일은 이미 사용 중입니다.")
         return value
 
-    def validate_password1(self, value):
-        if len(value) < 8:
-            raise serializers.ValidationError("The password must be at least 8 characters long.")
-
-        if not re.findall('[a-z]', value):
-            raise serializers.ValidationError("The password must contain at least one lowercase letter.")
-        if not re.findall('[0-9]', value):
-            raise serializers.ValidationError("The password must contain at least one digit.")
-        if not re.findall('[^a-zA-Z0-9]', value):
-            raise serializers.ValidationError("The password must contain at least one special character.")
-
-        return value
+    def validate_password1(self, password):
+        if len(password) < 8:
+            raise ValidationError("비밀번호는 최소 8자 이상이어야 합니다.")
+        if not re.findall(r'[A-Za-z]', password):
+            raise ValidationError("비밀번호에는 최소 하나의 영문자가 포함되어야 합니다.")
+        if not re.findall(r'[0-9]', password):
+            raise ValidationError("비밀번호에는 최소 하나의 숫자가 포함되어야 합니다.")
+        if not re.findall(r'[!@#$%^&*()-_=+]', password):
+            raise ValidationError("비밀번호에는 최소 하나의 특수문자가 포함되어야 합니다.")
+        if re.findall(r'[^a-zA-Z0-9!@#$%^&*()-_=+]', password):
+            raise ValidationError("비밀번호에는 영문 대소문자, 숫자, 특수문자 외에 다른 문자를 포함할 수 없습니다.")
+        return password
 
     def save(self, request):
         user = super().save(request)
@@ -74,11 +74,17 @@ class CustomSignupSerializer(RegisterSerializer):
 #         return token
 
 class DetailSerializer(serializers.ModelSerializer):
+    profile_image = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ['username', 'age', 'gender', 'birthday']
+        fields = ['username', 'age', 'gender', 'birthday', 'profile_image']
 
-
+    def get_profile_image(self, obj):
+        request = self.context.get('request')
+        if obj.profile_image and hasattr(obj.profile_image, 'url'):
+            return request.build_absolute_uri(obj.profile_image.url)
+        return None
 class IDCheckSerializer(serializers.Serializer):
     is_unique = serializers.BooleanField()
 

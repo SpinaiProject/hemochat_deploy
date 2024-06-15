@@ -13,13 +13,19 @@ class AssistantConfig(models.Model):
 
 
 class ChatRoom(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='chatrooms')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='chatrooms', null=True, blank=True)
     health_records = models.ManyToManyField(HealthRecordImage, related_name='chatrooms')
     title = models.CharField(max_length=255, blank=True)
     chatroom_id = models.CharField(max_length=255, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    is_temporary = models.BooleanField(default=False)
+    chat_num = models.IntegerField(default=0)
 
+    # def save(self, *args, **kwargs):
+    #         if self.is_temporary and self.chat_num > 5:
+    #             raise ValidationError('Temporary chat rooms cannot have more than 5 chat attempts.')
+    #         super().save(*args, **kwargs)
 
 class TempChatroom(models.Model):
     chatroom_id = models.CharField(max_length=255, unique=True)

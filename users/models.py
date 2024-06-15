@@ -16,17 +16,6 @@ def generate_default_email():
 
 
 class UserManager(BaseUserManager):
-    def validate_password(self, password):
-        if len(password) < 8:
-            raise ValidationError("비밀번호는 최소 8자 이상이어야 합니다.")
-        if not re.findall(r'[A-Za-z]', password):
-            raise ValidationError("비밀번호에는 최소 하나의 영문자가 포함되어야 합니다.")
-        if not re.findall(r'[0-9]', password):
-            raise ValidationError("비밀번호에는 최소 하나의 숫자가 포함되어야 합니다.")
-        if not re.findall(r'[!@#$%^&*()-_=+]', password):
-            raise ValidationError("비밀번호에는 최소 하나의 특수문자가 포함되어야 합니다.")
-        if re.findall(r'[^a-zA-Z0-9!@#$%^&*()-_=+]', password):
-            raise ValidationError("비밀번호에는 영문 대소문자, 숫자, 특수문자 외에 다른 문자를 포함할 수 없습니다.")
 
     def create_user(self, signup_id, password=None, **extra_fields):
         if not signup_id:
