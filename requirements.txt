@@ -52,7 +52,7 @@ numpy==1.26.4
 oauthlib==3.2.2
 openai==1.30.5
 packaging==23.2
-pillow==10.2.0
+pillow==10.3.0
 prompt-toolkit==3.0.43
 pycparser==2.21
 pydantic==2.6.0
