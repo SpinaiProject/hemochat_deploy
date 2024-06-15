@@ -8,7 +8,6 @@ attrs==23.2.0
 billiard==4.2.0
 boto3==1.34.28
 botocore==1.34.28
-celery==5.3.6
 certifi==2023.11.17
 cffi==1.16.0
 charset-normalizer==3.3.2
@@ -46,10 +45,6 @@ inflection==0.5.1
 jmespath==1.0.1
 jsonpatch==1.33
 jsonpointer==2.4
-kombu==5.3.5
-langchain-community==0.0.19
-langchain-core==0.1.22
-langsmith==0.0.87
 marshmallow==3.20.2
 multidict==6.0.5
 mypy-extensions==1.0.0
