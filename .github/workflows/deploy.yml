@@ -29,28 +29,28 @@ jobs:
               env:
                 - name: DJANGO_SECRET_KEY
                   value: 5xeuu%71e@wu=#f@^xs6fp0d$adc@c7dvk@8-gfb%0r@ynpe*-
-                - name: DJANGO_SUPERUSER_USERNAME
-                  value: super5
-                - name: DJANGO_SUPERUSER_PASSWORD
-                  value: "1234"
-                - name: DJANGO_SUPERUSER_EMAIL
-                  value: test@naver.com
-                - name: TEMPLATE_OCR_API_URL
-                  value: https://w9n1fu5j89.apigw.ntruss.com/custom/v1/27481/03c4dda4cec9eacb83f1261b891e0ce72a079d9c757e9bf1eea8996f0518cde0/infer
-                - name: TEMPLATE_OCR_SECRET_KEY
-                  value: eEhvT3VaYWNRS3NNZnppalpNT0d6VHRIV3JGV1dtSmk=
-                - name: GENERAL_OCR_API_URL
-                  value: https://w9n1fu5j89.apigw.ntruss.com/custom/v1/27480/4a0071dababd5ad0d165dcd30a4ad918f994704528736195f0e09477b00b7f46/general
-                - name: GENERAL_OCR_SECRET_KEY
-                  value: Tk5CZGhua0ZYU29mcm5wWWtUS0hpcFhvaEZzUGJIZlE=
                 - name: DJANGO_ALLOWED_HOSTS
                   value: "*"
                 - name: BASE_URL
                   value: https://port-0-hemochat-deploy-ghdys32bls1g00sw.sel5.cloudtype.app/
+                - name: GENERAL_OCR_API_URL
+                  value: https://w9n1fu5j89.apigw.ntruss.com/custom/v1/27480/4a0071dababd5ad0d165dcd30a4ad918f994704528736195f0e09477b00b7f46/general
+                - name: GENERAL_OCR_SECRET_KEY
+                  value: Tk5CZGhua0ZYU29mcm5wWWtUS0hpcFhvaEZzUGJIZlE=
+                - name: FRONT_KAKAO_REDIRECT
+                  value: https://hemochat.vercel.app/auth/kakao/callback
+                - name: FRONT_GOOGLE_REDIRECT
+                  value: https://hemochat.vercel.app/auth/google/callback
                 - name: KAKAO_REST_API_KEY
                   value: 823da08ec82fe151a5b36f671fe05845
                 - name: SOCIAL_AUTH_KAKAO_CLIENT_ID
                   value: "1017441"
+                - name: SOCIAL_AUTH_GOOGLE_CLIENT_ID
+                  value: 169288371711-fmr36gf7o5c4gvgqfelanbpvgatqsvst.apps.googleusercontent.com
+                - name: SOCIAL_AUTH_GOOGLE_SECRET
+                  value: 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
+                - name: STATE
+                  value: email
                 - name: DB_NAME
                   value: database_1
                 - name: DB_USER
@@ -72,15 +72,34 @@ jobs:
                 - name: DEFAULT_FILE_STORAGE
                   value: storages.backends.s3boto3.S3Boto3Storage
                 - name: OPEN_AI_API_KEY
-                  value: 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
+                  value: sk-proj-TGezIxydndsVu3USxbCMT3BlbkFJqvyaLbKdzvcJmZMC76Ir
+                - name: OPEN_AI_ASSISTANT_ID
+                  value: asst_r4JCusVE5yXI6zQH5ASfFjef
+                - name: OPEN_AI_INSTRUCTION
+                  value: 표를 재구조화 한 정보다. 상하, 좌우 인접 셀 관계를 유추해서 연관있는 정보들을 키:값 쌍으로 묶고 페어끼리는 엔터로 구분해라.
+                    키,값에 쌍따옴표는 붙이지마라. 키,값 하나라도 말이 안되면 해당 페어 통째로 버려라. 이 페어 리스트 추출 외에 어떠한 잡소리도
+                    금지
+                - name: OPEN_AI_CHAT_INSTRUCTION
+                  value: 의료 상담과 무관한 질문은 반드시 거절한다.첫 n개의 메시지는 환자의 의료검사 결과다. 해당 건강 수치들이 정상 범위 내에 있는지
+                    확인한다.정상 범위를 벗어난 경우 필요한 의학적 조치를 한국어로 상담해주며, 수치에 대한 의학적 정보에 대한 질의가 있을 때는
+                    그에 대한 개념 설명을 제공한다. 모든 상담은 한국어로 진행된다.대답은 반드시 장황하지않게,간결명료하게 제공해라.
                 - name: CELERY_BROKER_URL
-                  value: redis://svc.sel5.cloudtype.app:31387
+                  value: redis://svc.sel5.cloudtype.app:31387/1
                 - name: CELERY_RESULT_BACKEND
-                  value: redis://svc.sel5.cloudtype.app:31387
+                  value: redis://svc.sel5.cloudtype.app:31387/1
+                - name: REDIS_CACHE
+                  value: redis://svc.sel5.cloudtype.app:31387/2
+                - name: SENS_ACCESS_KEY
+                  value: a
+                - name: SENS_SECRET_KEY
+                  value: b
+                - name: SENS_SERVICE_ID
+                  value: c
+                - name: SENS_SENDER_NUMBER
+                  value: d
               ports: 8000
               start: python3 manage.py runserver 0:8000
-              prestart: python3 manage.py makemigrations && python3 manage.py migrate &&
-                python3 manage.py createsuperuser --noinpu
+              prestart: python3 manage.py makemigrations && python3 manage.py migrate
             context:
               git:
                 url: git@github.com:${{ github.repository }}.git
