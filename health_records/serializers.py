@@ -6,7 +6,7 @@ class HealthRecordImageSerializer(serializers.ModelSerializer):
     image = serializers.ImageField(allow_null=True, required=False)
     class Meta:
         model = HealthRecordImage
-        fields = ['user', 'title','image', 'ocr_text', 'created_at']
+        fields = ['id','user', 'title','image', 'ocr_text', 'created_at']
 
     def get_image(self, obj):
         request = self.context.get('request')

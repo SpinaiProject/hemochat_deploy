@@ -53,6 +53,7 @@ langsmith==0.0.87
 marshmallow==3.20.2
 multidict==6.0.5
 mypy-extensions==1.0.0
+mysqlclient==2.2.4
 numpy==1.26.4
 oauthlib==3.2.2
 openai==1.30.5
