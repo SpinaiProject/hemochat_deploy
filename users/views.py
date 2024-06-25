@@ -20,6 +20,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework.response import Response
 
+from .models import VerificationCode
 from .serializers import *
 
 from drf_yasg.utils import swagger_auto_schema
@@ -449,6 +450,8 @@ class UserDeleteView(APIView):
 
 # 전화번호 인증 관련 뷰함수(인증번호 발송, 검증)
 class SendVerificationCodeAPIView(APIView):
+    permission_classes = [AllowAny]
+
     @swagger_auto_schema(
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
@@ -465,15 +468,18 @@ class SendVerificationCodeAPIView(APIView):
     )
     def post(self, request, *args, **kwargs):
         phone_number = request.data.get('phone_number')
-        if phone_number is None:
+        if not phone_number:
             return Response({'error': '전화번호를 입력해주세요.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        user = get_object_or_404(User, phone_number=phone_number)
-        user.send_verification_code()
-        return Response({'message': '인증 코드가 발송되었습니다.'}, status=status.HTTP_200_OK)
-
+        verification_code = VerificationCode.objects.create(phone_number=phone_number)
+        if verification_code.send_verification_code():
+            return Response({'message': '인증 코드가 발송되었습니다.'}, status=status.HTTP_200_OK)
+        else:
+            return Response({'error': '인증 코드 발송에 실패했습니다. 다시 시도해주세요.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class VerifyPhoneNumberAPIView(APIView):
+    permission_classes = [AllowAny]
+
     @swagger_auto_schema(
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
@@ -492,15 +498,17 @@ class VerifyPhoneNumberAPIView(APIView):
     def post(self, request, *args, **kwargs):
         phone_number = request.data.get('phone_number')
         code = request.data.get('code')
-        if phone_number is None or code is None:
-            return Response({'error': '전화번호와 인증 코드를 모두 입력해주세요.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not phone_number or not code:
+            return Response({'error': '전화번호와 인증 코드를 입력해주세요.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        user = get_object_or_404(User, phone_number=phone_number)
-        if user.verify_phone_number(code):
-            return Response({'message': '전화번호가 인증되었습니다.'}, status=status.HTTP_200_OK)
-        else:
-            return Response({'error': '유효하지 않은 인증 코드입니다.'}, status=status.HTTP_400_BAD_REQUEST)
-
+        try:
+            verification_code = VerificationCode.objects.filter(phone_number=phone_number, code=code).latest('created_at')
+            if verification_code.verify_code(code):
+                return Response({'message': '인증에 성공했습니다.'}, status=status.HTTP_200_OK)
+            else:
+                return Response({'error': '인증 코드가 유효하지 않거나 만료되었습니다.'}, status=status.HTTP_400_BAD_REQUEST)
+        except VerificationCode.DoesNotExist:
+            return Response({'error': '인증 코드를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
 
 # 이메일 찾기 기능
 class SendEmailVerificationCodeAPIView(APIView):
