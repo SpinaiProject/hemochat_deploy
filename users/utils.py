@@ -1,7 +1,7 @@
 import requests
 import json
 import os
-from datetime import datetime
+import time
 import base64
 import hashlib
 import hmac
@@ -24,8 +24,8 @@ def send_sms(phone_number, message):
     service_id = os.environ.get('SENS_SERVICE_ID')
     sender_number = os.environ.get('SENS_SENDER_NUMBER')
 
-    timestamp = str(int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000))
-    signature = make_signature(access_key, secret_key, "POST", "/sms/v2/services/{serviceId}/messages", timestamp)
+    timestamp = str(int(time.time() * 1000))
+    signature = make_signature(access_key, secret_key, "POST", f"/sms/v2/services/{service_id}/messages", timestamp)
 
     headers = {
         "Content-Type": "application/json; charset=utf-8",
@@ -36,8 +36,13 @@ def send_sms(phone_number, message):
     data = {
         'type': 'SMS',
         'from': sender_number,
-        'to': [phone_number],
-        'content': message
+        'content': message,
+        "messages": [
+            {
+                "to": phone_number,
+                "content": message
+            }
+        ]
     }
 
     try:

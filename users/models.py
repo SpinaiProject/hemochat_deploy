@@ -9,7 +9,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.crypto import get_random_string
 from .utils import send_sms
-
+from django.utils import timezone
 
 def generate_default_email():
     return str(uuid.uuid4()) + '@example.com'
@@ -54,8 +54,6 @@ class User(AbstractUser):
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES, null=True, blank=True)
     birthday = models.DateField(null=True, blank=True)
     phone_number = models.CharField(max_length=20, null=True, blank=True)
-    phone_verified = models.BooleanField(default=False)
-    verification_code = models.CharField(max_length=6, blank=True, null=True)
     profile_image = models.ImageField(upload_to='profile_images/', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -70,20 +68,30 @@ class User(AbstractUser):
             self.username = get_random_string(10)
         super().save(*args, **kwargs)
 
-    def send_verification_code(self):
-        self.verification_code = '{:06d}'.format(random.randint(0, 999999))
-        self.save()
-        send_sms(self.phone_number, f'[헤모챗] 인증번호는 {self.verification_code}입니다.')
-        success, response = send_sms(self.phone_number, f'[헤모챗] 인증번호는 {self.verification_code}입니다.')
-        if success:
-            print("SMS sent successfully:", response)
-        else:
-            print("Fail to send SMS:", response)
 
-    def verify_phone_number(self, code):
-        if self.verification_code == code:
+
+class VerificationCode(models.Model):
+    phone_number = models.CharField(max_length=15)
+    code = models.CharField(max_length=6, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    phone_verified = models.BooleanField(default=False)
+
+    def send_verification_code(self):
+        self.code = '{:06d}'.format(random.randint(0, 999999))
+
+        success, response = send_sms(self.phone_number, f'[헤모챗] 인증번호는 {self.code}입니다.')
+        if success:
+            self.save()
+            return True
+        else:
+            return False
+
+    def is_valid(self):
+        return timezone.now() < self.created_at + timezone.timedelta(minutes=10)
+
+    def verify_code(self, code):
+        if self.code == code and self.is_valid():
             self.phone_verified = True
-            self.verification_code = None
             self.save()
             return True
         return False
