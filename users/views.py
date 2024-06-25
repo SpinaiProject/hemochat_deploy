@@ -462,7 +462,8 @@ class SendVerificationCodeAPIView(APIView):
         ),
         responses={
             200: openapi.Response(description='인증 코드가 발송되었습니다.'),
-            400: openapi.Response(description='잘못된 요청')
+            400: openapi.Response(description='전화번호를 입력해주세요.'),
+            500: openapi.Response(description='인증 코드 발송에 실패했습니다. 다시 시도해주세요.')
         },
         operation_description="(회원가입 전용. 아이디 비번찾기용 x)전화번호로 인증 코드를 발송합니다."
     )
@@ -490,10 +491,11 @@ class VerifyPhoneNumberAPIView(APIView):
             required=['phone_number', 'code']
         ),
         responses={
-            200: openapi.Response(description='전화번호가 인증되었습니다.'),
-            400: openapi.Response(description='잘못된 요청')
+            200: openapi.Response(description='인증이 성공했습니다.'),
+            400: openapi.Response(description='전화번호와 인증 코드를 입력해주세요./인증 코드가 유효하지 않거나 만료되었습니다.'),
+            404: openapi.Response(description='인증 코드를 찾을 수 없습니다.')
         },
-        operation_description="(회원가입 전용. 아이디 비번찾기용 x)인증번호를 받은 전화번호 + 인증 코드로 올바른 인증번호인가 검증"
+        operation_description="발송된 인증 코드를 검증합니다."
     )
     def post(self, request, *args, **kwargs):
         phone_number = request.data.get('phone_number')
