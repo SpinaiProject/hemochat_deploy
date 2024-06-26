@@ -57,16 +57,26 @@ class User(AbstractUser):
     profile_image = models.ImageField(upload_to='profile_images/', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    first_name = None
+    last_name = None
+
     objects = UserManager()
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
 
     def save(self, *args, **kwargs):
+        self.full_clean()
         if not self.random_directory_name:
             self.random_directory_name = get_random_string(20)
         if not self.username:
             self.username = get_random_string(10)
         super().save(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+        if self.phone_number and (not self.phone_number.isdigit() or len(self.phone_number) != 11 or not self.phone_number.startswith('010')):
+            raise ValidationError('Phone number must be an 11-digit number starting with 010.')
+
 
 
 
