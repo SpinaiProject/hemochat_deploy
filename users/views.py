@@ -1,4 +1,4 @@
-import os,json
+import os, json
 from json import JSONDecodeError
 import requests
 
@@ -504,7 +504,8 @@ class VerifyPhoneNumberAPIView(APIView):
             return Response({'error': '전화번호와 인증 코드를 입력해주세요.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            verification_code = VerificationCode.objects.filter(phone_number=phone_number, code=code).latest('created_at')
+            verification_code = VerificationCode.objects.filter(phone_number=phone_number, code=code).latest(
+                'created_at')
             if verification_code.verify_code(code):
                 return Response({'message': '인증에 성공했습니다.'}, status=status.HTTP_200_OK)
             else:
@@ -523,11 +524,13 @@ class SendEmailVerificationCodeAPIView(APIView):
                 'phone_number': openapi.Schema(type=openapi.TYPE_STRING, description='전화번호'),
                 'username': openapi.Schema(type=openapi.TYPE_STRING, description='이름')
             },
-            required=['phone_number','username']
+            required=['phone_number', 'username']
         ),
         responses={
             200: openapi.Response(description='인증 코드가 발송되었습니다.'),
-            400: openapi.Response(description='잘못된 요청')
+            400: openapi.Response(description='잘못된 요청'),
+            404: openapi.Response(description='해당 유저가 존재하지 않습니다.'),
+            500: openapi.Response(description='인증 코드 발송에 실패했습니다. 다시 시도해주세요.')
         },
         operation_description="(이메일 찾기 전용) 전화번호로 인증 코드를 발송합니다."
     )
@@ -537,9 +540,15 @@ class SendEmailVerificationCodeAPIView(APIView):
         if phone_number is None or username is None:
             return Response({'error': '전화번호와 이름이 필요합니다.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        user = get_object_or_404(User, phone_number=phone_number,username=username)
-        user.send_verification_code()
-        return Response({'message': '인증 코드가 발송되었습니다.'}, status=status.HTTP_200_OK)
+        user_exists = User.objects.filter(phone_number=phone_number, username=username).exists()
+        if not user_exists:
+            return Response({'error': '해당 유저가 존재하지 않습니다.'}, status=status.HTTP_404_NOT_FOUND)
+
+        verification_code = VerificationCode.objects.create(phone_number=phone_number)
+        if verification_code.send_verification_code():
+            return Response({'message': '인증 코드가 발송되었습니다.'}, status=status.HTTP_200_OK)
+        else:
+            return Response({'error': '인증 코드 발송에 실패했습니다. 다시 시도해주세요.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class VerifyPhoneNumberAndReturnEmailAPIView(APIView):
@@ -550,9 +559,10 @@ class VerifyPhoneNumberAndReturnEmailAPIView(APIView):
             type=openapi.TYPE_OBJECT,
             properties={
                 'phone_number': openapi.Schema(type=openapi.TYPE_STRING, description='전화번호'),
-                'verification_code': openapi.Schema(type=openapi.TYPE_STRING, description='인증 코드')
+                'username': openapi.Schema(type=openapi.TYPE_STRING, description='이름'),
+                'code': openapi.Schema(type=openapi.TYPE_STRING, description='인증 코드')
             },
-            required=['phone_number', 'verification_code']
+            required=['phone_number', 'username', 'code']
         ),
         responses={
             200: openapi.Response(description='이메일이 반환되었습니다.', schema=openapi.Schema(
@@ -562,22 +572,29 @@ class VerifyPhoneNumberAndReturnEmailAPIView(APIView):
                     'created_at': openapi.Schema(type=openapi.TYPE_STRING, description='가입일자')
                 }
             )),
-            400: openapi.Response(description='잘못된 요청')
+            400: openapi.Response(description='잘못된 요청'),
+            404: openapi.Response(description='인증 코드를 찾을 수 없습니다.')
         },
         operation_description="인증번호 받은 전화번호와 인증 코드를 사용하여 유효한 코드인 경우 이메일을 반환합니다."
     )
     def post(self, request, *args, **kwargs):
         phone_number = request.data.get('phone_number')
-        verification_code = request.data.get('verification_code')
-        if phone_number is None or verification_code is None:
-            return Response({'error': '전화번호와 인증 코드가 모두 필요합니다.'},
-                            status=status.HTTP_400_BAD_REQUEST)
+        code = request.data.get('code')
+        username = request.data.get('username')
 
-        user = get_object_or_404(User, phone_number=phone_number)
-        if user.verify_phone_number(verification_code):
-            return Response({'email': user.email,'created_at':user.created_at}, status=status.HTTP_200_OK)
-        else:
-            return Response({'error': '유효하지 않은 인증 코드입니다.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not all([phone_number, code, username]):
+            return Response({'error': '전화번호, 이름, 인증 코드가 모두 필요합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = get_object_or_404(User, phone_number=phone_number, username=username)
+        try:
+            verification_code = VerificationCode.objects.filter(phone_number=phone_number, code=code).latest(
+                'created_at')
+            if verification_code.verify_code(code):
+                return Response({'email': user.email, 'created_at': user.created_at}, status=status.HTTP_200_OK)
+            else:
+                return Response({'error': '인증 코드가 유효하지 않거나 만료되었습니다.'}, status=status.HTTP_400_BAD_REQUEST)
+        except VerificationCode.DoesNotExist:
+            return Response({'error': '인증 코드를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
 
 
 # 비밀번호 찾기 기능
@@ -612,7 +629,7 @@ class VerifyPhoneNumberAndReturnEmailAPIView(APIView):
 #             return Response({'error': "사용자를 찾을 수 없습니다. 이메일을 확인하고 다시 시도하십시오."}, status=status.HTTP_404_NOT_FOUND)
 
 
-class VerifyPhoneNumberForPassword(APIView):
+class SendPhoneNumberForPassword(APIView):
     permission_classes = [AllowAny]
 
     @swagger_auto_schema(
@@ -633,17 +650,59 @@ class VerifyPhoneNumberForPassword(APIView):
     )
     def post(self, request, *args, **kwargs):
         email = request.data.get('email')
-        input_phone_number = request.data.get('phone_number')
+        phone_number = request.data.get('phone_number')
 
-        if not email or not input_phone_number:
+        if not email or not phone_number:
             return Response({'error': '이메일과 전화번호는 필수 항목입니다.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        user = get_object_or_404(User, username=email)
-        if user.phone_number == input_phone_number:
-            user.send_verification_code()
+        user = get_object_or_404(User, email=email)
+
+        if user.phone_number == phone_number:
+            verification_code = VerificationCode.objects.create(phone_number=phone_number)
+            verification_code.send_verification_code()
             return Response({'message': '인증 코드가 발송되었습니다. 전화를 확인해 주세요.'}, status=status.HTTP_200_OK)
         else:
             return Response({'error': '전화번호가 일치하지 않습니다.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class VerifyVerificationCodeView(APIView):
+    permission_classes = [AllowAny]
+
+    @swagger_auto_schema(
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'phone_number': openapi.Schema(type=openapi.TYPE_STRING, description='전화번호'),
+                'code': openapi.Schema(type=openapi.TYPE_STRING, description='인증 코드')
+            },
+            required=['phone_number', 'code']
+        ),
+        responses={
+            200: openapi.Response(description='인증 번호가 유효합니다.'),
+            400: openapi.Response(description='잘못된 요청'),
+            404: openapi.Response(description='인증 코드를 찾을 수 없습니다.')
+        },
+        operation_description="(비밀번호 찾기 전용) 인증번호 확인 API. 이 API가 정상실행 되면, 비밀번호 변경 페이지로 리다이렉트"
+    )
+    def post(self, request, *args, **kwargs):
+        phone_number = request.data.get('phone_number')
+        code = request.data.get('code')
+
+        if not all([phone_number, code]):
+            return Response({'error': '전화번호와 인증 코드가 필요합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            verification_code = VerificationCode.objects.filter(phone_number=phone_number, code=code).latest(
+                'created_at')
+            if verification_code.verify_code(code):
+                return Response({'message': '인증 번호가 유효합니다.'}, status=status.HTTP_200_OK)
+            else:
+                return Response({'error': '인증번호가 유효하지 않거나 만료되었습니다.'}, status=status.HTTP_400_BAD_REQUEST)
+        except VerificationCode.DoesNotExist:
+            return Response({'error': '인증 코드를 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': '서버 오류가 발생했습니다.'},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class PasswordResetView(APIView):
@@ -654,28 +713,34 @@ class PasswordResetView(APIView):
             type=openapi.TYPE_OBJECT,
             properties={
                 'email': openapi.Schema(type=openapi.TYPE_STRING, description='이메일 주소'),
-                'verification_code': openapi.Schema(type=openapi.TYPE_STRING, description='인증 코드'),
-                'new_password': openapi.Schema(type=openapi.TYPE_STRING, description='새 비밀번호')
+                'new_password': openapi.Schema(type=openapi.TYPE_STRING, description='새 비밀번호'),
+                'new_password2': openapi.Schema(type=openapi.TYPE_STRING, description='새 비밀번호 확인')
             },
-            required=['email', 'verification_code', 'new_password']
+            required=['email', 'new_password', 'new_password2']
         ),
         responses={
             200: openapi.Response(description='비밀번호가 성공적으로 변경되었습니다.'),
             400: openapi.Response(description='잘못된 요청'),
-            404: openapi.Response(description='사용자를 찾을 수 없습니다')
+            404: openapi.Response(description='사용자를 찾을 수 없습니다.'),
+            500: openapi.Response(description='서버 오류가 발생했습니다.')
         },
-        operation_description="(비밀번호 찾기 전용) 비밀번호 재설정"
+        operation_description="비밀번호 재설정 API입니다. 반드시 인증을 통과한 사람만 이 API에 접근할 수 있도록 설정해주세요."
     )
     def post(self, request, *args, **kwargs):
         email = request.data.get('email')
-        verification_code = request.data.get('verification_code')
         new_password = request.data.get('new_password')
+        check_password = request.data.get('new_password2')
 
-        user = get_object_or_404(User, username=email)
+        if not all([email, new_password]):
+            return Response({'error': '이메일과 새 비밀번호가 필요합니다.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if user.verify_phone_number(verification_code):
-            user.set_password(new_password)
-            user.save()
-            return Response({'message': '비밀번호가 성공적으로 변경되었습니다.'}, status=status.HTTP_200_OK)
-        else:
-            return Response({'error': '인증번호가 틀립니다.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            user = get_object_or_404(User, email=email)
+            if new_password == check_password:
+                user.set_password(new_password)
+                user.save()
+                return Response({'message': '비밀번호가 성공적으로 변경되었습니다.'}, status=status.HTTP_200_OK)
+            else:
+                return Response({'message': '비밀번호가 일치하지 않습니다.'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'error': '서버 오류가 발생했습니다.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -16,7 +16,6 @@ class CustomSignupSerializer(RegisterSerializer):
     age = serializers.IntegerField(required=False, allow_null=True)
     gender = serializers.ChoiceField(choices=User.GENDER_CHOICES, required=False, allow_null=True)
     birthday = serializers.DateField(required=False, allow_null=True)
-    birth_year = serializers.IntegerField(required=False, allow_null=True)
     phone_number = serializers.CharField(max_length=20, required=False, allow_null=True)
 
     def validate_email(self, value):
@@ -47,7 +46,6 @@ class CustomSignupSerializer(RegisterSerializer):
         user.age = self.validated_data.get('age', None)
         user.gender = self.validated_data.get('gender', None)
         user.birthday = self.validated_data.get('birthday', None)
-        user.birth_year = self.validated_data.get('birth_year', None)
         user.phone_number = self.validated_data.get('phone_number', None)
         user.save()
         return user
