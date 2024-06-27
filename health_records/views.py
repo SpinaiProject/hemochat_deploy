@@ -226,9 +226,12 @@ def extract_ocr_texts(record):
     image_name = record.image.name
     file_extension = os.path.splitext(image_name)[1][1:]
     try:
-        base64_image = base64.b64encode(record.image.file.read()).decode('utf-8')
+        image_data = record.image.file.read()
+        if not image_data:
+            return None
+        base64_image = base64.b64encode(image_data).decode('utf-8')
     except Exception as e:
-        return "파일을 처리하는 도중 오류가 발생했습니다.", None
+        return None
 
     body = {
         "version": "V2",
@@ -246,6 +249,7 @@ def extract_ocr_texts(record):
         "enableTableDetection": False
     }
     response = requests.post(api_url, headers=headers, json=body)
+
     if response.status_code != 200:
         return None
     else:
@@ -325,7 +329,9 @@ def general_ocr_analysis(request):
             chunk_message = chunk.choices[0].delta.content
             state = chunk.choices[0].finish_reason
             if state == 'stop':
-                target_record.ocr_text = complete_analysis_result
+                lines = complete_analysis_result.split('\n', 1)
+                target_record.title = lines[0]
+                target_record.ocr_text = lines[1] if len(lines) > 1 else ""
                 target_record.save()
                 break
             else:
