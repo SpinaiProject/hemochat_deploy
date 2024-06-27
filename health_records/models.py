@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from django.db import models
 from django.utils.crypto import get_random_string
 from users.models import User
@@ -22,4 +23,4 @@ class HealthRecordImage(models.Model):
     image = models.ImageField(upload_to=user_directory_path)
     ocr_text = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    title = models.TextField(blank=True)
+    title = models.TextField(default="AI 분석을 하지 않은 이미지입니다", blank=True)
