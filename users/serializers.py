@@ -76,7 +76,7 @@ class DetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['username', 'age', 'gender', 'birthday', 'profile_image']
+        fields = [ 'profile_image','username','phone_number','email', 'age',  'birthday','gender']
 
     def get_profile_image(self, obj):
         request = self.context.get('request')
