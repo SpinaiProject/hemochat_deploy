@@ -7,6 +7,7 @@ urlpatterns = [
     path('google/login/', google_login, name='google_login'),
 
     path('email/signup/', EmailSignupView.as_view(), name='email_signup'),
+    path('email/duplicate/',EmailCheckView.as_view() , name='email_duplicate'),
     path('email/login/', TokenObtainPairView.as_view(), name='email_login'),
     path('email/send-verification-code/', SendVerificationCodeAPIView.as_view(), name='send_verification_code'),
     path('email/verify-phone-number/', VerifyPhoneNumberAPIView.as_view(), name='verify_phone_number'),

@@ -347,29 +347,48 @@ class EmailSignupView(APIView):
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+class EmailCheckView(APIView):
+    permission_classes = [AllowAny]
 
-# class EmailAlreadyExistAPIView(APIView):
-#     permission_classes = [AllowAny]
-#
-#     def post(self, request, *args, **kwargs):
-#         email = request.data.get('email', None)
-#
-#         if email is None:
-#             return Response({"error": "이메일을 입력하세요"}, status=status.HTTP_400_BAD_REQUEST)
-#
-#         user_exists = User.objects.filter(
-#             username=email
-#         ).exists() or User.objects.filter(
-#             kakao_email=email
-#         ).exists() or User.objects.filter(
-#             google_email=email
-#         ).exists()
-#
-#         if user_exists:
-#             return Response({"exists": True}, status=status.HTTP_200_OK)
-#         else:
-#             return Response({"exists": False}, status=status.HTTP_200_OK)
-
+    @swagger_auto_schema(
+        manual_parameters=[
+            openapi.Parameter(
+                'email',
+                openapi.IN_QUERY,
+                description="중복 확인할 이메일 주소",
+                type=openapi.TYPE_STRING,
+                required=True
+            ),
+        ],
+        responses={
+            200: openapi.Response(
+                description="이메일을 사용할 수 있습니다.",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "detail": openapi.Schema(type=openapi.TYPE_STRING, description="확인 메시지")
+                    }
+                )
+            ),
+            400: openapi.Response(
+                description="이미 카카오,구글,일반회원가입 중 하나로 가입된 이메일입니다.",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "detail": openapi.Schema(type=openapi.TYPE_STRING, description="에러 메시지")
+                    }
+                )
+            )
+        },
+        operation_description="이메일 중복 여부를 확인합니다. 쿼리 파라미터로 이메일 값 전달해주세요."
+    )
+    def get(self, request, *args, **kwargs):
+        email = request.query_params.get('email')
+        try:
+            check_email_duplicate(email)
+            return Response({"detail": "이메일을 사용할 수 있습니다."}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"이미 카카오,구글,일반회원가입 중 하나로 가입된 이메일입니다."}, status=status.HTTP_400_BAD_REQUEST)
 
 # class CustomTokenObtainPairView(TokenObtainPairView):
 #     serializer_class = CustomTokenObtainPairSerializer
